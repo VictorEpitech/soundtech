@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 
 from app.admin import router as admin_router
+from app.alerts.router import router as incidents_router
 from app.auth.router import router as auth_router
 from app.bootstrap import ensure_bootstrap_admin
 from app.config import get_settings
@@ -15,6 +16,7 @@ from app.db import engine
 from app.ha.router import announcements_router, presets_router, speakers_router
 from app.logging import setup_logging
 from app.ma.router import router as music_router
+from app.ui.router import register as register_ui
 
 log = logging.getLogger("sound.api")
 
@@ -41,6 +43,8 @@ app.include_router(speakers_router)
 app.include_router(presets_router)
 app.include_router(announcements_router)
 app.include_router(music_router)
+app.include_router(incidents_router)
+register_ui(app)
 
 
 @app.get("/healthz")

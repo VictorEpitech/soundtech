@@ -1,0 +1,16 @@
+{% if not rows %}
+<p class="muted">Aucune annonce.</p>
+{% else %}
+<ul class="list">
+  {% for a in rows %}
+  <li>
+    <div class="row between">
+      <span class="badge mono status-{{ a.status }}">{{ a.status }}</span>
+      <span class="muted small mono">{{ a.created_at[:16] | replace('T', ' ') if a.created_at else '' }}</span>
+    </div>
+    <p>{% if a.is_test %}<span class="badge mono">TEST</span> {% endif %}{{ a.text }}</p>
+    <p class="muted small">{{ a.author_email or '' }} · {{ a.targets | length }} enceinte(s)</p>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

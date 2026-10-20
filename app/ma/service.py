@@ -14,7 +14,11 @@ def _is_playing(player: dict[str, Any]) -> bool:
     return str(getattr(state, "value", state)).lower() == "playing"
 
 
-async def duck(ma: MAClient | None, player_ids: list[str]) -> list[str]:
+async def duck(
+    ma: MAClient | None,
+    player_ids: list[str],
+    timeout: float = DUCK_TIMEOUT,  # noqa: ASYNC109
+) -> list[str]:
     """Met en pause les players musique en lecture. Best-effort : ne lève jamais.
 
     Renvoie les players effectivement mis en pause (à passer à `resume`).
@@ -24,7 +28,7 @@ async def duck(ma: MAClient | None, player_ids: list[str]) -> list[str]:
         return []
     paused: list[str] = []
     try:
-        async with asyncio.timeout(DUCK_TIMEOUT):
+        async with asyncio.timeout(timeout):
             async with ma.session() as conn:
                 players = await conn.call("players/all") or []
                 for p in players:

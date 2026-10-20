@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Accueil{% endblock %}
+{% block content %}
+<h1>Bonjour{% if user.display_name %}, {{ user.display_name }}{% endif %}</h1>
+<p class="muted">{{ role_labels.get(user.role, user.role) }} · <span class="mono">{{ user.email }}</span></p>
+<div class="grid">
+  <a class="card tile" href="/music"><span class="icon icon-lg">music_note</span><h2>Musique</h2><p class="muted">Lecteurs, recherche, volume.</p></a>
+  <a class="card tile" href="/announce"><span class="icon icon-lg">campaign</span><h2>Annonces</h2><p class="muted">Diffuser un message sur les enceintes.</p></a>
+  {% if user.role == 'admin' %}
+  <a class="card tile" href="/admin"><span class="icon icon-lg">admin_panel_settings</span><h2>Administration</h2><p class="muted">Utilisateurs, enceintes, messages.</p></a>
+  {% endif %}
+</div>
+{% endblock %}

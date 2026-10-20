@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Erreur {{ status }}{% endblock %}
+{% block content %}
+<section class="card login">
+  <span class="icon icon-xl">lock</span>
+  <h1 class="mono">{{ status }}</h1>
+  <p class="muted">{{ message }}</p>
+  <a class="btn btn-tonal" href="/">Retour à l'accueil</a>
+</section>
+{% endblock %}

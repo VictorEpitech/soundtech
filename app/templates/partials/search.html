@@ -1,0 +1,17 @@
+{% if results is none %}
+{% elif not results or not results.values() | map('length') | sum %}
+<p class="muted">Aucun résultat pour « {{ q }} ».</p>
+{% else %}
+{% for kind, items in results.items() if items %}
+<h3 class="mono">{{ kind }}</h3>
+<ul class="list">
+  {% for i in items %}
+  <li class="row between">
+    <div><strong>{{ i.name }}</strong>
+      {% if i.artists %}<span class="muted small"> · {{ i.artists | join(', ') }}</span>{% endif %}</div>
+    <button class="btn btn-tonal" type="button" data-play="{{ i.uri }}"><span class="icon">play_arrow</span>Lire</button>
+  </li>
+  {% endfor %}
+</ul>
+{% endfor %}
+{% endif %}

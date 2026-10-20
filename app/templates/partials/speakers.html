@@ -1,0 +1,20 @@
+<ul class="list">
+  {% for s in rows %}
+  <li>
+    <form class="grid-form" hx-patch="/speakers/{{ s.id }}" hx-swap="none" data-json data-refresh="#speakers" data-toast="Enceinte mise à jour">
+      <p class="mono muted small span-all">{{ s.entity_id }}</p>
+      <label class="field"><span>Nom</span><input type="text" name="name" value="{{ s.name }}" required maxlength="255"></label>
+      <label class="field"><span>Groupe</span><input type="text" name="group" value="{{ s.group or '' }}" maxlength="100"></label>
+      <label class="field"><span>notify_service</span><input class="mono" type="text" name="notify_service" value="{{ s.notify_service or '' }}" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
+      <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" value="{{ s.ma_player_id or '' }}" pattern="\S+"></label>
+      <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+    </form>
+    <div class="row">
+        <button class="btn {{ 'btn-tonal' if s.is_active else 'btn-text' }}" type="button" hx-patch="/speakers/{{ s.id }}" hx-vals='{"is_active": {{ 'false' if s.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#speakers"><span class="icon">{{ 'toggle_on' if s.is_active else 'toggle_off' }}</span>{{ 'Active' if s.is_active else 'Inactive' }}</button>
+        <button class="btn btn-icon btn-danger" type="button" hx-delete="/speakers/{{ s.id }}" hx-confirm="Supprimer {{ s.name }} ?" hx-swap="none" data-refresh="#speakers" title="Supprimer"><span class="icon">delete</span></button>
+    </div>
+  </li>
+  {% else %}
+  <li class="muted">Aucune enceinte.</li>
+  {% endfor %}
+</ul>

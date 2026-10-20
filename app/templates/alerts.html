@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Alertes{% endblock %}
+{% block content %}
+<h1>Alertes de sécurité</h1>
+<p class="banner-test" id="test-banner" hidden><span class="icon">science</span>MODE TEST : le message vocal sera préfixé et la carte Teams marquée TEST.</p>
+<section class="card">
+  <h2>Nouvel incident</h2>
+  <form id="incident-form" class="stack" hx-post="/incidents" hx-ext="json-typed" data-json data-bools="is_test" data-toast="Brouillon créé, à confirmer ci-dessous" data-reset data-refresh="#incidents" hx-swap="none">
+    <label class="field"><span>Type</span>
+      <select name="type">
+        <option value="evacuation">Évacuation</option>
+        <option value="confinement">Confinement</option>
+        <option value="intrusion">Intrusion</option>
+        <option value="incendie">Incendie</option>
+        <option value="meteo">Météo</option>
+        <option value="autre">Autre</option>
+      </select>
+    </label>
+    <label class="field"><span>Titre</span><input type="text" name="title" maxlength="255" required></label>
+    <label class="field"><span>Message (lu sur les enceintes et envoyé sur Teams)</span>
+      <textarea name="message" rows="3" maxlength="500" required></textarea>
+    </label>
+    <label class="check"><input type="checkbox" name="is_test" value="true" id="is-test"><span>Incident de test</span></label>
+    <button class="btn btn-filled" type="submit"><span class="icon">edit_note</span>Créer le brouillon</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Incidents</h2>
+  <div id="incidents" hx-get="/ui/alerts/list" hx-trigger="load, refresh" data-poll="5000"></div>
+</section>
+{% endblock %}

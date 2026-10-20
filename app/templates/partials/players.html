@@ -1,0 +1,29 @@
+{% if error %}
+<p class="alert" role="alert"><span class="icon">cloud_off</span>Music Assistant indisponible : {{ error }}</p>
+{% elif not players %}
+<p class="muted">Aucun lecteur.</p>
+{% else %}
+<ul class="list">
+  {% for p in players %}
+  <li class="player {% if not p.available %}is-off{% endif %}">
+    <div class="player-info">
+      <strong>{{ p.name }}</strong>
+      <span class="badge mono">{{ p.state or '—' }}</span>
+      <span class="muted small">{{ p.current or '' }}</span>
+    </div>
+    <div class="player-ctl">
+      <button class="btn btn-icon" hx-post="/music/players/{{ p.id }}/previous" hx-swap="none" data-refresh="#players" title="Précédent"><span class="icon">skip_previous</span></button>
+      {% if p.state == 'playing' %}
+      <button class="btn btn-icon btn-filled" hx-post="/music/players/{{ p.id }}/pause" hx-swap="none" data-refresh="#players" title="Pause"><span class="icon">pause</span></button>
+      {% else %}
+      <button class="btn btn-icon btn-filled" hx-post="/music/players/{{ p.id }}/resume" hx-swap="none" data-refresh="#players" title="Lecture"><span class="icon">play_arrow</span></button>
+      {% endif %}
+      <button class="btn btn-icon" hx-post="/music/players/{{ p.id }}/next" hx-swap="none" data-refresh="#players" title="Suivant"><span class="icon">skip_next</span></button>
+      <span class="icon vol">volume_up</span>
+      <input class="slider" type="range" name="level" min="0" max="100" value="{{ p.volume or 0 }}" aria-label="Volume {{ p.name }}"
+             hx-post="/music/players/{{ p.id }}/volume" hx-trigger="change" hx-swap="none" data-json data-ints="level">
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

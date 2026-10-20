@@ -34,6 +34,20 @@ class Settings(BaseSettings):
     ma_token: SecretStr = SecretStr("")
     ma_timeout: float = 10.0
 
+    alert_confirm_text: str = "ALERTE"
+    alert_test_confirm_text: str = "TEST"
+    alert_duck_timeout: float = 2.0
+    alert_rate_limit: int = 10
+    alert_rate_window: int = 60
+    alert_send_lease: int = 120
+
+    teams_app_id: str = ""
+    teams_app_secret: SecretStr = SecretStr("")
+    teams_tenant_id: str = ""
+    teams_service_url: str = ""
+    teams_conversation_id: str = ""
+    teams_timeout: float = 10.0
+
     @field_validator("ha_tts_service")
     @classmethod
     def _service_format(cls, v: str) -> str:
@@ -44,6 +58,16 @@ class Settings(BaseSettings):
     @property
     def ha_configured(self) -> bool:
         return bool(self.ha_url and self.ha_token.get_secret_value())
+
+    @property
+    def teams_configured(self) -> bool:
+        return bool(
+            self.teams_app_id
+            and self.teams_app_secret.get_secret_value()
+            and (self.teams_tenant_id or self.entra_tenant_id)
+            and self.teams_service_url
+            and self.teams_conversation_id
+        )
 
     @property
     def ma_configured(self) -> bool:

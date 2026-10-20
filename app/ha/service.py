@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth import audit
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.ha import queue
 from app.ha.client import HAClient, HAError
 from app.ma import service as ma_service
@@ -114,7 +114,14 @@ async def process_one(
         paused: list[str] = []
         outcome: dict[str, Any] | None = None
         try:
-            paused = await ma_service.duck(ma, [t.get("ma_player_id") for t in ann.targets])
+            players = [t.get("ma_player_id") for t in ann.targets]
+            if ann.priority == Priority.alert:
+                # Une alerte n'attend jamais la musique : ducking borné, best-effort.
+                paused = await ma_service.duck(
+                    ma, players, timeout=get_settings().alert_duck_timeout
+                )
+            else:
+                paused = await ma_service.duck(ma, players)
             notify = {t["entity_id"]: t.get("notify_service") for t in ann.targets}
             outcome = await ha.speak_many(entities, ann.text, notify)
         except Exception as exc:  # défense : ne jamais laisser une annonce en `sending`

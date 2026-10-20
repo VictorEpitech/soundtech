@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Annonces{% endblock %}
+{% block content %}
+<h1>Annonces</h1>
+<section class="card">
+  <h2>Nouvelle annonce</h2>
+  <form id="announce-form" class="stack" hx-post="/announcements" hx-ext="json-typed" data-json data-arrays="speaker_ids" data-bools="is_test" data-toast="Annonce envoyée" data-reset data-refresh="#history" hx-confirm="Diffuser cette annonce ?" hx-swap="none">
+    {% if presets %}
+    <label class="field"><span>Message pré-enregistré</span>
+      <select name="preset_id" id="preset-select">
+        <option value="">— Message libre —</option>
+        {% for p in presets %}<option value="{{ p.id }}" title="{{ p.text }}">{{ p.title }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label class="field"><span>Texte</span>
+      <textarea name="text" id="free-text" rows="3" maxlength="500" placeholder="Message à diffuser"></textarea>
+    </label>
+    <fieldset class="chips">
+      <legend>Enceintes</legend>
+      {% for s in speakers %}
+      <label class="chip"><input type="checkbox" name="speaker_ids" value="{{ s.id }}"><span>{{ s.name }}</span></label>
+      {% else %}
+      <p class="muted">Aucune enceinte active. Un administrateur doit en déclarer.</p>
+      {% endfor %}
+    </fieldset>
+    <label class="check"><input type="checkbox" name="is_test" value="true"><span>Ceci est un test</span></label>
+    <button class="btn btn-filled" type="submit"><span class="icon">send</span>Envoyer</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Dernières annonces</h2>
+  <div id="history" hx-get="/ui/announce/history" hx-trigger="load, refresh, every 5s">
+  </div>
+</section>
+{% endblock %}

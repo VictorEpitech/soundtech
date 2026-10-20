@@ -1,0 +1,34 @@
+{% if not rows %}
+<p class="muted">Aucun incident.</p>
+{% else %}
+<ul class="list">
+  {% for i in rows %}
+  <li class="incident{% if i.is_test %} is-test{% endif %}">
+    {% if i.is_test %}<p class="banner-test"><span class="icon">science</span>TEST</p>{% endif %}
+    <div class="row between">
+      <span class="badge mono incident-{{ i.status }}">{{ i.status }}</span>
+      <span class="muted small mono">{{ i.created_at[:16] | replace('T', ' ') if i.created_at else '' }}</span>
+    </div>
+    <p><strong>{{ i.title }}</strong> <span class="muted">({{ i.type }})</span></p>
+    <p>{{ i.message }}</p>
+    <p class="muted small">{{ i.created_by_email or '' }}</p>
+    {% if i.delivery %}
+    <p class="small">
+      Enceintes : {% if i.delivery.tts.ok %}<span class="status-done">ok</span>{% else %}<span class="status-failed">échec ({{ i.delivery.tts.error }})</span>{% endif %}
+      · Teams : {% if i.delivery.teams.ok %}<span class="status-done">{{ 'ignoré' if i.delivery.teams.skipped else 'ok' }}</span>{% else %}<span class="status-failed">échec ({{ i.delivery.teams.error }})</span>{% endif %}
+    </p>
+    {% endif %}
+    {% if i.status in ('draft', 'failed') %}
+    {% set word = test_word if i.is_test else alert_word %}
+    <form class="row" hx-post="/incidents/{{ i.id }}/send" hx-ext="json-typed" data-json data-toast="Alerte envoyée" data-refresh="#incidents" hx-swap="none">
+      <label class="field"><span>Tapez « {{ word }} » pour confirmer</span>
+        <input type="text" name="confirm" autocomplete="off" required pattern="{{ word }}"></label>
+      <button class="btn btn-filled btn-danger" type="submit"><span class="icon">notifications_active</span>{{ 'Renvoyer' if i.status == 'failed' else 'Envoyer' }}{% if i.is_test %} (test){% endif %}</button>
+    </form>
+    {% elif i.status == 'sent' %}
+    <button class="btn btn-tonal" type="button" hx-post="/incidents/{{ i.id }}/close" hx-confirm="Clore cet incident ?" hx-swap="none" data-toast="Incident clos" data-refresh="#incidents"><span class="icon">check_circle</span>Clore</button>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

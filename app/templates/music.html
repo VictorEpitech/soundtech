@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Musique{% endblock %}
+{% block content %}
+<h1>Musique</h1>
+<section class="card">
+  <h2>Lecteurs</h2>
+  <div id="players" hx-get="/ui/music/players" hx-trigger="refresh, every 8s [!document.activeElement || document.activeElement.type !== 'range']" hx-swap="innerHTML">
+    {% include "partials/players.html" %}
+  </div>
+</section>
+<section class="card">
+  <h2>Recherche</h2>
+  <form class="row" hx-get="/ui/music/search" hx-target="#results" hx-indicator="#results">
+    <label class="field grow"><span>Titre, artiste, album…</span><input type="search" name="q" maxlength="200" required></label>
+    <label class="field"><span>Lire sur</span>
+      <select id="target-player">
+        {% for p in players if p.available %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-filled" type="submit"><span class="icon">search</span>Rechercher</button>
+  </form>
+  <div id="results" class="results"></div>
+</section>
+{% endblock %}

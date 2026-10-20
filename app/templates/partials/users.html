@@ -1,0 +1,21 @@
+<ul class="list">
+  {% for u in rows %}
+  <li class="row between wrap">
+    <div class="grow">
+      <strong class="mono">{{ u.email }}</strong>
+      <span class="muted small">{{ u.display_name }}{% if not u.has_logged_in %} · jamais connecté{% endif %}</span>
+    </div>
+    <select name="role" aria-label="Rôle de {{ u.email }}" hx-patch="/admin/users/{{ u.id }}" hx-trigger="change" hx-swap="none" data-json data-refresh="#users" data-toast="Rôle mis à jour">
+      {% for r in roles %}<option value="{{ r.value }}" {% if u.role == r.value %}selected{% endif %}>{{ role_labels[r.value] }}</option>{% endfor %}
+    </select>
+    {% if u.is_active %}
+    <button class="btn btn-tonal" hx-patch="/admin/users/{{ u.id }}" hx-vals='{"is_active": false}' data-json hx-swap="none" data-refresh="#users"><span class="icon">toggle_on</span>Actif</button>
+    {% else %}
+    <button class="btn btn-text" hx-patch="/admin/users/{{ u.id }}" hx-vals='{"is_active": true}' data-json hx-swap="none" data-refresh="#users"><span class="icon">toggle_off</span>Inactif</button>
+    {% endif %}
+    <button class="btn btn-icon btn-danger" hx-delete="/admin/users/{{ u.id }}" hx-confirm="Supprimer {{ u.email }} ?" hx-swap="none" data-refresh="#users" title="Supprimer"><span class="icon">delete</span></button>
+  </li>
+  {% else %}
+  <li class="muted">Aucun utilisateur.</li>
+  {% endfor %}
+</ul>

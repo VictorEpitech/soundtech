@@ -10,6 +10,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -90,7 +91,7 @@ class Preset(Base):
 
 
 class Priority(enum.IntEnum):
-    """Plus petit = plus prioritaire. `alert` est réservé à un usage interne (phase 5)."""
+    """Plus petit = plus prioritaire. `alert` est réservé aux incidents (phase 5)."""
 
     alert = 0
     admin = 1
@@ -127,3 +128,50 @@ class Announcement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IncidentStatus(enum.StrEnum):
+    draft = "draft"
+    sent = "sent"
+    failed = "failed"
+    closed = "closed"
+
+
+class IncidentType(enum.StrEnum):
+    evacuation = "evacuation"
+    confinement = "confinement"
+    intrusion = "intrusion"
+    incendie = "incendie"
+    meteo = "meteo"
+    autre = "autre"
+
+
+class Incident(Base):
+    __tablename__ = "incidents"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'sent', 'failed', 'closed')", name="ck_incidents_status"
+        ),
+        Index("ix_incidents_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    type: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(255))
+    message: Mapped[str] = mapped_column(Text)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    status: Mapped[str] = mapped_column(String(16), default="draft", server_default="draft")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_by_email: Mapped[str | None] = mapped_column(String(320))
+    closed_by_email: Mapped[str | None] = mapped_column(String(320))
+    announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("announcements.id", ondelete="SET NULL")
+    )
+    delivery: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
