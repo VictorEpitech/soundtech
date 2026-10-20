@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     test_prefix: str = "Ceci est un test."
     announcement_max_length: int = 500
 
+    ma_url: str = ""
+    ma_token: SecretStr = SecretStr("")
+    ma_timeout: float = 10.0
+
     @field_validator("ha_tts_service")
     @classmethod
     def _service_format(cls, v: str) -> str:
@@ -40,6 +44,10 @@ class Settings(BaseSettings):
     @property
     def ha_configured(self) -> bool:
         return bool(self.ha_url and self.ha_token.get_secret_value())
+
+    @property
+    def ma_configured(self) -> bool:
+        return bool(self.ma_url)
 
 
 @lru_cache

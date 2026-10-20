@@ -47,6 +47,7 @@ class SpeakerIn(BaseModel):
     is_active: bool = True
     group: str | None = Field(default=None, max_length=100)
     notify_service: str | None = Field(default=None, max_length=255, pattern=NOTIFY_SERVICE_PATTERN)
+    ma_player_id: str | None = Field(default=None, min_length=1, max_length=255, pattern=r"^\S+$")
 
     _name = field_validator("name")(_clean)
 
@@ -56,6 +57,7 @@ class SpeakerPatch(BaseModel):
     is_active: bool | None = None
     group: str | None = Field(default=None, max_length=100)
     notify_service: str | None = Field(default=None, max_length=255, pattern=NOTIFY_SERVICE_PATTERN)
+    ma_player_id: str | None = Field(default=None, min_length=1, max_length=255, pattern=r"^\S+$")
 
     @field_validator("name")
     @classmethod
@@ -71,6 +73,7 @@ def _speaker_out(s: Speaker) -> dict[str, Any]:
         "is_active": s.is_active,
         "group": s.group,
         "notify_service": s.notify_service,
+        "ma_player_id": s.ma_player_id,
     }
 
 

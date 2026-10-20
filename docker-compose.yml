@@ -16,6 +16,8 @@ x-app: &app
     HA_URL: ${HA_URL:-}
     HA_TOKEN: ${HA_TOKEN:-}
     HA_TTS_SERVICE: ${HA_TTS_SERVICE:-notify.alexa_media}
+    MA_URL: ${MA_URL:-}
+    MA_TOKEN: ${MA_TOKEN:-}
     TEST_PREFIX: ${TEST_PREFIX:-Ceci est un test.}
 
 services:
@@ -42,6 +44,8 @@ services:
       HA_URL: ${HA_URL:-}
       HA_TOKEN: ${HA_TOKEN:-}
       HA_TTS_SERVICE: ${HA_TTS_SERVICE:-notify.alexa_media}
+      MA_URL: ${MA_URL:-}
+      MA_TOKEN: ${MA_TOKEN:-}
       TEST_PREFIX: ${TEST_PREFIX:-Ceci est un test.}
       RUN_MIGRATIONS: "0"
     networks: [internal, edge]

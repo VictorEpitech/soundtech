@@ -128,3 +128,26 @@ async def test_validate_id_token_unit(client) -> None:
     s: Settings = _settings()
     claims = await oidc.validate_id_token(s, make_id_token("n1"), "n1")
     assert claims["tid"] == TENANT
+
+
+async def test_login_lookup_by_oid_before_email(client, do_login, make_user) -> None:
+    u1, u2 = await make_user(Role.admin), await make_user(Role.admin)
+    assert (await do_login(preferred_username=u1.email, oid="oid-1")).status_code == 302
+    r = await do_login(preferred_username=u2.email, oid="oid-1")
+    assert r.status_code == 302
+    assert (await client.get("/auth/me")).json()["email"] == u1.email
+
+
+async def test_login_missing_oid_refused(client, do_login, make_user) -> None:
+    u = await make_user(Role.admin)
+    r = await do_login(preferred_username=u.email, oid=None)
+    assert r.status_code == 401
+
+
+async def test_refresh_concurrent_single_winner(client, do_login, make_user) -> None:
+    import asyncio
+
+    u = await make_user(Role.admin)
+    await do_login(preferred_username=u.email)
+    rs = await asyncio.gather(client.post("/auth/refresh"), client.post("/auth/refresh"))
+    assert sorted(r.status_code for r in rs) == [204, 401]

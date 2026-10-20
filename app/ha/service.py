@@ -1,18 +1,26 @@
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from redis.asyncio import Redis
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth import audit
 from app.config import Settings
 from app.ha import queue
 from app.ha.client import HAClient, HAError
+from app.ma import service as ma_service
+from app.ma.client import MAClient
 from app.models import Announcement, AnnouncementStatus, Priority, Role, Speaker, User
 
 log = logging.getLogger("sound.ha")
+
+INTERRUPTED = "interrompue"
+SENDING_STALE = timedelta(minutes=2)
+QUEUED_STALE = timedelta(minutes=1)
+LOCK_TIMEOUT = 120
 
 
 def priority_for(user: User) -> Priority:
@@ -49,6 +57,7 @@ def build_announcement(
                 "entity_id": s.entity_id,
                 "name": s.name,
                 "notify_service": s.notify_service,
+                "ma_player_id": s.ma_player_id,
             }
             for s in speakers
         ],
@@ -87,7 +96,9 @@ async def submit(
         raise
 
 
-async def process_one(db: async_sessionmaker[AsyncSession], redis: Redis, ha: HAClient) -> bool:
+async def process_one(
+    db: async_sessionmaker[AsyncSession], redis: Redis, ha: HAClient, ma: MAClient | None = None
+) -> bool:
     """Traite la prochaine annonce (priorité puis FIFO). False si la file est vide."""
     raw = await queue.pop(redis)
     if raw is None:
@@ -100,31 +111,81 @@ async def process_one(db: async_sessionmaker[AsyncSession], redis: Redis, ha: HA
         ann.started_at = datetime.now(UTC)
         await s.commit()
         entities = [t["entity_id"] for t in ann.targets]
+        paused: list[str] = []
+        outcome: dict[str, Any] | None = None
         try:
+            paused = await ma_service.duck(ma, [t.get("ma_player_id") for t in ann.targets])
             notify = {t["entity_id"]: t.get("notify_service") for t in ann.targets}
             outcome = await ha.speak_many(entities, ann.text, notify)
         except Exception as exc:  # défense : ne jamais laisser une annonce en `sending`
             log.exception("announcement %s crashed", raw)
             outcome = {e: HAError(f"internal error: {type(exc).__name__}") for e in entities}
-        ann.results = {
-            e: ({"ok": True} if err is None else {"ok": False, "error": str(err)})
-            for e, err in outcome.items()
-        }
-        all_ok = all(err is None for err in outcome.values())
-        ann.status = (AnnouncementStatus.done if all_ok else AnnouncementStatus.failed).value
-        ann.finished_at = datetime.now(UTC)
-        await s.commit()
+        finally:
+            try:
+                await ma_service.resume(ma, paused)
+            except Exception:
+                log.warning("announcement %s: music resume failed", raw)
+            if outcome is None:  # annulation / BaseException
+                ann.results = {"_error": INTERRUPTED}
+                ann.status = AnnouncementStatus.failed.value
+            else:
+                ann.results = {
+                    e: ({"ok": True} if err is None else {"ok": False, "error": str(err)})
+                    for e, err in outcome.items()
+                }
+                all_ok = all(err is None for err in outcome.values())
+                ann.status = (
+                    AnnouncementStatus.done if all_ok else AnnouncementStatus.failed
+                ).value
+            ann.finished_at = datetime.now(UTC)
+            await s.commit()
     return True
 
 
-async def drain(db: async_sessionmaker[AsyncSession], redis: Redis, ha: HAClient) -> int:
+async def reconcile(db: async_sessionmaker[AsyncSession], redis: Redis) -> None:
+    """Rattrape les annonces orphelines (crash worker, perte de file). À appeler sous verrou."""
+    now = datetime.now(UTC)
+    async with db() as s:
+        await s.execute(
+            update(Announcement)
+            .where(
+                Announcement.status == AnnouncementStatus.sending.value,
+                Announcement.started_at < now - SENDING_STALE,
+            )
+            .values(
+                status=AnnouncementStatus.failed.value,
+                results={"_error": INTERRUPTED},
+                finished_at=now,
+            )
+        )
+        await s.commit()
+        rows = (
+            await s.execute(
+                select(Announcement.id, Announcement.priority).where(
+                    Announcement.status == AnnouncementStatus.queued.value,
+                    Announcement.created_at < now - QUEUED_STALE,
+                )
+            )
+        ).all()
+    for ann_id, prio in rows:
+        if await queue.requeue(redis, str(ann_id), Priority(prio)):
+            log.warning("announcement %s requeued", ann_id)
+
+
+async def drain(
+    db: async_sessionmaker[AsyncSession], redis: Redis, ha: HAClient, ma: MAClient | None = None
+) -> int:
     """Vide la file sous verrou : un seul consommateur, donc un message à la fois par enceinte."""
-    lock = redis.lock(queue.LOCK_KEY, timeout=300, blocking=False)
+    lock = redis.lock(queue.LOCK_KEY, timeout=LOCK_TIMEOUT, blocking=False)
     if not await lock.acquire():
         return 0
     n = 0
     try:
-        while await process_one(db, redis, ha):
+        await reconcile(db, redis)
+        while True:
+            await lock.reacquire()  # renouvelle le TTL à chaque annonce
+            if not await process_one(db, redis, ha, ma):
+                break
             n += 1
     finally:
         try:

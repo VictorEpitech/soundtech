@@ -95,6 +95,7 @@ async def callback(
     try:
         id_token = await oidc.exchange_code(settings, code, tx["cv"])
         claims = await oidc.validate_id_token(settings, id_token, tx["nonce"])
+        oid = claims["oid"]
     except Exception as e:  # noqa: BLE001 - tout échec réseau/validation = refus
         log.warning("oidc failure: %s", e)
         audit.record(session, "login_failed", request=request, detail={"reason": "oidc"})
@@ -102,12 +103,9 @@ async def callback(
         raise HTTPException(401, "authentication failed") from None
 
     email = (claims.get("preferred_username") or claims.get("email") or "").strip().lower()
-    oid = claims["oid"]
-    user = (
-        (await session.execute(select(User).where((User.entra_oid == oid) | (User.email == email))))
-        .scalars()
-        .first()
-    )
+    user = (await session.execute(select(User).where(User.entra_oid == oid))).scalars().first()
+    if user is None:
+        user = (await session.execute(select(User).where(User.email == email))).scalars().first()
     reason = None
     if user is None:
         reason = "unknown_user"
@@ -178,7 +176,19 @@ async def refresh(
     if found is None:
         raise HTTPException(401, "invalid refresh token")
     rt, user = found
-    rt.revoked_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    consumed = await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.jti == rt.jti,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > now,
+        )
+        .values(revoked_at=now)
+        .returning(RefreshToken.jti)
+    )
+    if consumed.first() is None:
+        raise HTTPException(401, "invalid refresh token")
     access, new_refresh = await _issue(session, settings, user)
     resp = Response(status_code=204)
     _set_session_cookies(resp, settings, access, new_refresh)

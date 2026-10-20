@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.db import engine
 from app.ha.router import announcements_router, presets_router, speakers_router
 from app.logging import setup_logging
+from app.ma.router import router as music_router
 
 log = logging.getLogger("sound.api")
 
@@ -39,6 +40,7 @@ app.include_router(admin_router)
 app.include_router(speakers_router)
 app.include_router(presets_router)
 app.include_router(announcements_router)
+app.include_router(music_router)
 
 
 @app.get("/healthz")

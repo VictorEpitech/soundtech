@@ -41,3 +41,6 @@ Chaque phase : tests (pytest + httpx, mocks HA/MA/Graph), migration Alembic, ima
 - Workflow : push sur GitHub perso → « Pull and redeploy » manuel dans Portainer (stack Git). Pas de registre : Portainer **build** les images sur l'annexe (`build:` dans le compose). CI GitHub Actions limitée à lint/tests.
 - Réseau : l'annexe est sur le même réseau que HA et MA (pas de VPN).
 - Conséquences : Dockerfile multi-stage léger (Tailwind compilé au build) ; migrations Alembic lancées au démarrage de l'API ; Caddy gère TLS ou reverse proxy existant de l'annexe.
+
+## Charte graphique
+- Référence : `docs/charte-graphique.md` (MD3, thème clair/sombre, Inter/Roboto/JetBrains Mono, Material Symbols Outlined, tonal elevation, animations 200-300 ms). À appliquer à tout le front (templates Jinja2/Tailwind : tokens de couleur en variables CSS, mode auto via prefers-color-scheme).

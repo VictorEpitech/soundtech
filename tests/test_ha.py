@@ -348,3 +348,65 @@ async def test_priority_for_role(make_user) -> None:
     assert service.priority_for(await make_user(Role.admin)) == Priority.admin
     assert service.priority_for(await make_user(Role.staff)) == Priority.staff
     assert service.priority_for(await make_user(Role.student)) != Priority.alert
+
+
+async def test_drain_reconciles_orphans(db, redis) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+
+    old = datetime.now(UTC) - timedelta(minutes=5)
+    stuck = await _mk_ann(db, [_eid()], Priority.staff)
+    lost = await _mk_ann(db, [_eid()], Priority.admin, "perdue")
+    queued_ok = await _mk_ann(db, [_eid()], Priority.staff, "enfile")
+    await queue.push(redis, str(queued_ok.id), Priority.staff)
+    async with db() as s:
+        await s.execute(
+            update(Announcement)
+            .where(Announcement.id == stuck.id)
+            .values(status="sending", started_at=old)
+        )
+        await s.execute(
+            update(Announcement)
+            .where(Announcement.id.in_([lost.id, queued_ok.id]))
+            .values(created_at=old)
+        )
+        await s.commit()
+    ha, calls = mock_ha()
+    await service.reconcile(db, redis)
+    await service.reconcile(db, redis)  # idempotent, sans doublon
+    assert await redis.zcard(queue.QUEUE_KEY) == 2
+    assert await redis.zscore(queue.QUEUE_KEY, str(lost.id)) < queue.SCALE * 2
+    assert await service.drain(db, redis, ha) == 2
+    async with db() as s:
+        st = await s.get(Announcement, stuck.id)
+        assert st.status == "failed" and st.results == {"_error": "interrompue"}
+        assert (await s.get(Announcement, lost.id)).status == "done"
+        assert (await s.get(Announcement, queued_ok.id)).status == "done"
+    assert calls[0][2]["message"] == "perdue"
+
+
+async def test_cancelled_announcement_never_stays_sending(db, redis) -> None:
+    import asyncio
+
+    ann = await _mk_ann(db, [_eid()], Priority.staff)
+    await queue.push(redis, str(ann.id), Priority.staff)
+
+    class Hang:
+        async def speak_many(self, *a: Any, **k: Any) -> Any:
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        await service.process_one(db, redis, Hang())  # type: ignore[arg-type]
+    async with db() as s:
+        a = await s.get(Announcement, ann.id)
+    assert a.status == "failed" and a.results == {"_error": "interrompue"}
+
+
+async def test_drain_renews_lock_and_releases(db, redis) -> None:
+    for _ in range(2):
+        ann = await _mk_ann(db, [_eid()], Priority.staff)
+        await queue.push(redis, str(ann.id), Priority.staff)
+    ha, _ = mock_ha()
+    assert await service.drain(db, redis, ha) == 2
+    assert await redis.exists(queue.LOCK_KEY) == 0

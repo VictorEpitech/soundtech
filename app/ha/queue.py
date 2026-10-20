@@ -15,6 +15,17 @@ async def push(redis: Redis, announcement_id: str, priority: Priority) -> None:
     await redis.zadd(QUEUE_KEY, {announcement_id: int(priority) * SCALE + seq % SCALE})
 
 
+async def requeue(redis: Redis, announcement_id: str, priority: Priority) -> bool:
+    """Remet en file si absent (sans doublon). True si réellement ajouté."""
+    if await redis.zscore(QUEUE_KEY, announcement_id) is not None:
+        return False
+    seq = await redis.incr(SEQ_KEY)
+    added = await redis.zadd(
+        QUEUE_KEY, {announcement_id: int(priority) * SCALE + seq % SCALE}, nx=True
+    )
+    return bool(added)
+
+
 async def pop(redis: Redis) -> str | None:
     res = await redis.zpopmin(QUEUE_KEY, 1)
     if not res:

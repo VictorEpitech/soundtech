@@ -77,6 +77,7 @@ class Speaker(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     group: Mapped[str | None] = mapped_column(String(100))
     notify_service: Mapped[str | None] = mapped_column(String(255))
+    ma_player_id: Mapped[str | None] = mapped_column(String(255))
 
 
 class Preset(Base):
