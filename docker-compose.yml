@@ -1,0 +1,123 @@
+name: sound
+
+x-app: &app
+  build: .
+  restart: unless-stopped
+  environment:
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    REDIS_URL: redis://redis:6379/0
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:?requis}
+    ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:?requis}
+    ENTRA_CLIENT_SECRET: ${ENTRA_CLIENT_SECRET:?ENTRA_CLIENT_SECRET requis}
+    PUBLIC_BASE_URL: https://${DOMAIN}
+    JWT_SECRET: ${JWT_SECRET:?JWT_SECRET requis}
+    BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+    HA_URL: ${HA_URL:-}
+    HA_TOKEN: ${HA_TOKEN:-}
+    HA_TTS_SERVICE: ${HA_TTS_SERVICE:-notify.alexa_media}
+    TEST_PREFIX: ${TEST_PREFIX:-Ceci est un test.}
+
+services:
+  api:
+    <<: *app
+    networks: [internal, edge]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *app
+    command: ["arq", "app.worker.WorkerSettings"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      HA_URL: ${HA_URL:-}
+      HA_TOKEN: ${HA_TOKEN:-}
+      HA_TTS_SERVICE: ${HA_TTS_SERVICE:-notify.alexa_media}
+      TEST_PREFIX: ${TEST_PREFIX:-Ceci est un test.}
+      RUN_MIGRATIONS: "0"
+    networks: [internal, edge]
+    depends_on:
+      redis: {condition: service_healthy}
+      api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "arq", "--check", "app.worker.WorkerSettings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+configs:
+  caddyfile:
+    file: ./Caddyfile
+
+networks:
+  internal:
+    internal: true
+  edge:
+
+volumes:
+  db_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
