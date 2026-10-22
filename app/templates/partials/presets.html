@@ -7,7 +7,7 @@
       <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
     </form>
     <div class="row">
-        <button class="btn {{ 'btn-tonal' if p.is_active else 'btn-text' }}" type="button" hx-patch="/presets/{{ p.id }}" hx-vals='{"is_active": {{ 'false' if p.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#presets"><span class="icon">{{ 'toggle_on' if p.is_active else 'toggle_off' }}</span>{{ 'Actif' if p.is_active else 'Inactif' }}</button>
+        <button class="btn {{ 'btn-tonal' if p.is_active else 'btn-text' }}" type="button" hx-patch="/presets/{{ p.id }}" hx-vals='{"is_active": {{ 'false' if p.is_active else 'true' }}}' data-json data-ints="shift" hx-swap="none" data-refresh="#presets"><span class="icon">{{ 'toggle_on' if p.is_active else 'toggle_off' }}</span>{{ 'Actif' if p.is_active else 'Inactif' }}</button>
         <button class="btn btn-icon btn-danger" type="button" hx-delete="/presets/{{ p.id }}" hx-confirm="Supprimer ce message ?" hx-swap="none" data-refresh="#presets" title="Supprimer"><span class="icon">delete</span></button>
     </div>
   </li>

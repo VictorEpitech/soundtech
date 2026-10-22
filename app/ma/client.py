@@ -5,6 +5,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
+import httpx
 import websockets
 from websockets.exceptions import WebSocketException
 
@@ -40,6 +41,17 @@ def ws_url(url: str) -> str:
     elif base.startswith("http://"):
         base = "ws://" + base[len("http://") :]
     return base if base.endswith("/ws") else base + "/ws"
+
+
+def http_url(url: str) -> str:
+    base = url.rstrip("/")
+    if base.endswith("/ws"):
+        base = base[: -len("/ws")]
+    if base.startswith("ws://"):
+        base = "http://" + base[len("ws://") :]
+    elif base.startswith("wss://"):
+        base = "https://" + base[len("wss://") :]
+    return base
 
 
 class MAConnection:
@@ -86,6 +98,7 @@ class MAClient:
         if not url:
             raise MAConfigError("MA_URL est requis pour la musique")
         self.url = ws_url(url)
+        self.http_url = http_url(url)
         self._token = token
         self.timeout = timeout
 
@@ -128,6 +141,65 @@ class MAClient:
         if cmd not in ("next", "previous", "play_pause", "pause", "play", "stop"):
             raise ValueError(cmd)
         await self.call(f"player_queues/{cmd}", queue_id=queue_id)
+
+    async def queue(self, queue_id: str, limit: int = 100) -> dict[str, Any]:
+        """État de la file (`current_index`) et ses éléments, sur une seule session."""
+        async with self.session() as conn:
+            q = await conn.call("player_queues/get", queue_id=queue_id) or {}
+            items = await conn.call("player_queues/items", queue_id=queue_id, limit=limit, offset=0)
+        return {"current_index": q.get("current_index"), "items": items or []}
+
+    async def queue_delete(self, queue_id: str, item_id: str) -> None:
+        await self.call("player_queues/delete_item", queue_id=queue_id, item_id_or_index=item_id)
+
+    async def queue_move(self, queue_id: str, item_id: str, shift: int) -> None:
+        await self.call(
+            "player_queues/move_item", queue_id=queue_id, queue_item_id=item_id, pos_shift=shift
+        )
+
+    async def queue_clear(self, queue_id: str) -> None:
+        await self.call("player_queues/clear", queue_id=queue_id)
+
+    async def queue_play_item(self, queue_id: str, item_id: str) -> None:
+        await self.call("player_queues/play_index", queue_id=queue_id, index=item_id)
+
+    async def image(
+        self,
+        provider: str,
+        path: str,
+        size: int,
+        *,
+        max_bytes: int,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> tuple[bytes, str] | None:
+        """Image servie par MA (`/imageproxy`) avec le token côté serveur ; None si indisponible.
+
+        L'hôte est toujours celui de MA_URL ; `path` n'est qu'un paramètre de requête.
+        """
+        headers = {"Authorization": f"Bearer {self._token}"} if self._token else {}
+        params = {"provider": provider, "path": path, "size": str(size)}
+        base = self.http_url
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.timeout, follow_redirects=False, transport=transport
+            ) as http:
+                async with http.stream(
+                    "GET", f"{base}/imageproxy", params=params, headers=headers
+                ) as r:
+                    ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
+                    if r.status_code != 200 or not ctype.startswith("image/") or "svg" in ctype:
+                        return None
+                    declared = r.headers.get("content-length", "")
+                    if declared.isdigit() and int(declared) > max_bytes:
+                        return None
+                    buf = bytearray()
+                    async for chunk in r.aiter_bytes():
+                        buf += chunk
+                        if len(buf) > max_bytes:
+                            return None
+        except httpx.HTTPError:
+            return None
+        return (bytes(buf), ctype) if buf else None
 
     async def volume_set(self, player_id: str, level: int) -> None:
         await self.call("players/cmd/volume_set", player_id=player_id, volume_level=level)

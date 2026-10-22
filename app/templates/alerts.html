@@ -2,30 +2,49 @@
 {% block title %}Alertes{% endblock %}
 {% block content %}
 <h1>Alertes de sécurité</h1>
-<p class="banner-test" id="test-banner" hidden><span class="icon">science</span>MODE TEST : le message vocal sera préfixé et la carte Teams marquée TEST.</p>
+<p class="banner-test" id="test-banner" hidden><span class="icon">science</span>MODE EXERCICE : le message vocal sera préfixé et la carte Teams marquée TEST.</p>
 <section class="card">
-  <h2>Nouvel incident</h2>
-  <form id="incident-form" class="stack" hx-post="/incidents" hx-ext="json-typed" data-json data-bools="is_test" data-toast="Brouillon créé, à confirmer ci-dessous" data-reset data-refresh="#incidents" hx-swap="none">
-    <label class="field"><span>Type</span>
-      <select name="type">
-        <option value="evacuation">Évacuation</option>
-        <option value="confinement">Confinement</option>
-        <option value="intrusion">Intrusion</option>
-        <option value="incendie">Incendie</option>
-        <option value="meteo">Météo</option>
-        <option value="autre">Autre</option>
-      </select>
+  <div class="mode-switch">
+    <label class="switch" for="is-test">
+      <input type="checkbox" role="switch" id="is-test">
+      <span class="track" aria-hidden="true"><span class="thumb"></span></span>
+      <span class="switch-text"><strong>Mode exercice / test</strong>
+        <span id="mode-state" class="muted">Désactivé : les alertes sont RÉELLES</span></span>
     </label>
-    <label class="field"><span>Titre</span><input type="text" name="title" maxlength="255" required></label>
-    <label class="field"><span>Message (lu sur les enceintes et envoyé sur Teams)</span>
-      <textarea name="message" rows="3" maxlength="500" required></textarea>
-    </label>
-    <label class="check"><input type="checkbox" name="is_test" value="true" id="is-test"><span>Incident de test</span></label>
-    <button class="btn btn-filled" type="submit"><span class="icon">edit_note</span>Créer le brouillon</button>
-  </form>
+  </div>
+  {% if not templates %}
+  <p class="muted">Aucun modèle d'alerte actif. Un administrateur peut en configurer dans Admin.</p>
+  {% else %}
+  <div class="alert-grid" id="alert-grid" data-alert-word="{{ alert_word }}" data-test-word="{{ test_word }}">
+    {% for t in templates %}
+    <button type="button" class="alert-btn" data-type="{{ t.type }}" data-label="{{ t.label }}" data-title="{{ t.title }}" data-message="{{ t.message }}"{% if t.color %} style="--tone: {{ t.color }}; --on-tone: #fff"{% endif %}>
+      <span class="icon">{{ t.icon or 'warning' }}</span>
+      <span class="alert-label">{{ t.label }}</span>
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
 </section>
+
+<dialog id="alert-dialog" class="menu alert-dialog" aria-labelledby="ad-title">
+  <form method="dialog" class="stack" id="ad-form">
+    <p class="badge mono ad-mode" id="ad-mode"></p>
+    <h2 id="ad-title"></h2>
+    <p id="ad-message" class="ad-message"></p>
+    <p class="muted small" id="ad-help"></p>
+    <label class="field" id="ad-confirm-field"><span id="ad-confirm-label"></span>
+      <input type="text" id="ad-confirm" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    </label>
+    <div class="row">
+      <button class="btn btn-text" type="button" id="ad-cancel">Annuler</button>
+      <button class="btn btn-filled btn-danger" type="submit" id="ad-send" disabled><span class="icon">notifications_active</span><span id="ad-send-label"></span></button>
+    </div>
+  </form>
+</dialog>
+
 <section class="card">
-  <h2>Incidents</h2>
+  <h2>Derniers évènements</h2>
   <div id="incidents" hx-get="/ui/alerts/list" hx-trigger="load, refresh" data-poll="5000"></div>
 </section>
 {% endblock %}
+{% block scripts %}<script src="/static/alerts.js" defer></script>{% endblock %}

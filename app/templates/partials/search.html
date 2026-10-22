@@ -1,15 +1,20 @@
-{% if results is none %}
-{% elif not results or not results.values() | map('length') | sum %}
+{% if groups is not defined %}
+{% elif not groups %}
 <p class="muted">Aucun résultat pour « {{ q }} ».</p>
 {% else %}
-{% for kind, items in results.items() if items %}
-<h3 class="mono">{{ kind }}</h3>
-<ul class="list">
+{% for label, items in groups %}
+<h3 class="mono">{{ label }}</h3>
+<ul class="list media-list">
   {% for i in items %}
-  <li class="row between">
-    <div><strong>{{ i.name }}</strong>
-      {% if i.artists %}<span class="muted small"> · {{ i.artists | join(', ') }}</span>{% endif %}</div>
-    <button class="btn btn-tonal" type="button" data-play="{{ i.uri }}"><span class="icon">play_arrow</span>Lire</button>
+  <li>
+    <button class="media" type="button" data-uri="{{ i.uri }}" data-name="{{ i.name }}" data-type="{{ i.media_type }}">
+      <img class="cover" src="{{ i.image or '/static/cover.svg' }}" alt="" loading="lazy" width="48" height="48">
+      <span class="media-text">
+        <strong>{{ i.name }}</strong>
+        {% if i.artists %}<span class="muted small">{{ i.artists | join(', ') }}</span>{% endif %}
+      </span>
+      <span class="icon">more_vert</span>
+    </button>
   </li>
   {% endfor %}
 </ul>

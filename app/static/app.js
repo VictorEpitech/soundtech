@@ -130,23 +130,85 @@
       location.href = "/login";
       return;
     }
-    var play = e.target.closest("[data-play]");
-    if (play) {
-      var sel = document.getElementById("target-player");
-      if (!sel || !sel.value) { toast("Aucun lecteur disponible", true); return; }
-      var r = await fetch("/music/players/" + encodeURIComponent(sel.value) + "/play", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uri: play.dataset.play, option: "replace" }),
-      });
-      if (r.ok) { toast("Lecture lancée"); setTimeout(function () { refresh("#players"); }, 800); }
-      else toast(errorText({ status: r.status, responseText: await r.text() }), true);
+    var grp = e.target.closest("[data-group]");
+    if (grp) groupCall(grp.dataset.group, null, null);
+  });
+
+  // Sélection multi-lecteurs, mémorisée en localStorage.
+  var SEL_KEY = "sound.music.selection";
+  function loadSel() {
+    try {
+      var v = JSON.parse(localStorage.getItem(SEL_KEY) || "[]");
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+  function saveSel(ids) {
+    try { localStorage.setItem(SEL_KEY, JSON.stringify(ids)); } catch (e) { /* stockage indisponible */ }
+  }
+  function boxes() { return document.querySelectorAll("#players [data-sel]"); }
+  function selected() {
+    return Array.prototype.filter.call(boxes(), function (b) { return b.checked; })
+      .map(function (b) { return b.dataset.sel; });
+  }
+  function syncSel() {
+    var bar = document.getElementById("group-bar");
+    if (!bar) return;
+    var n = selected().length;
+    bar.hidden = n === 0;
+    document.getElementById("sel-count").textContent = n + (n > 1 ? " lecteurs" : " lecteur");
+  }
+  function restoreSel() {
+    var ids = loadSel();
+    boxes().forEach(function (b) { b.checked = ids.indexOf(b.dataset.sel) >= 0; });
+    syncSel();
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    restoreSel();
+    document.dispatchEvent(new CustomEvent("selection-changed"));
+  });
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    if (e.target.id === "players") {
+      restoreSel();
+      document.dispatchEvent(new CustomEvent("selection-changed"));
     }
   });
 
+  // Appelle l'endpoint existant sur chaque lecteur coché en parallèle ; un échec n'arrête pas les autres.
+  async function groupCall(action, payload, okMsg) {
+    var ids = selected();
+    if (!ids.length) { toast("Aucun lecteur sélectionné", true); return; }
+    var results = await Promise.all(ids.map(async function (id) {
+      try {
+        var r = await fetch("/music/players/" + encodeURIComponent(id) + "/" + action, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: payload ? JSON.stringify(payload) : undefined,
+        });
+        return r.ok ? null : errorText({ status: r.status, responseText: await r.text() });
+      } catch (err) { return "Serveur injoignable"; }
+    }));
+    var failed = results.filter(Boolean).length;
+    if (failed) toast(failed + "/" + ids.length + " lecteur(s) en échec : " + results.filter(Boolean)[0], true);
+    else toast(okMsg || "Commande envoyée");
+    setTimeout(function () { refresh("#players"); }, 800);
+  }
+
+  window.SoundUI = {
+    toast: toast, groupCall: groupCall, selected: selected, refresh: refresh,
+  };
+
   // Message pré-enregistré : désactive le texte libre.
   document.addEventListener("change", function (e) {
+    if (e.target.dataset && e.target.dataset.sel) {
+      saveSel(selected()); syncSel();
+      document.dispatchEvent(new CustomEvent("selection-changed"));
+      return;
+    }
+    if (e.target.id === "group-volume") {
+      groupCall("volume", { level: parseInt(e.target.value, 10) }, "Volume appliqué");
+      return;
+    }
     if (e.target.id !== "preset-select") return;
     var txt = document.getElementById("free-text");
     txt.disabled = !!e.target.value;

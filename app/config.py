@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     rl_refresh_limit: int = 30
     rl_announce_limit: int = 20
     rl_music_limit: int = 120
+    rl_music_image_limit: int = 600
+    ma_image_max_bytes: int = 2_000_000
     rl_webhook_limit: int = 3000
 
     teams_app_id: str = ""

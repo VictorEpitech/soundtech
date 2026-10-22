@@ -10,7 +10,7 @@
       <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
     </form>
     <div class="row">
-        <button class="btn {{ 'btn-tonal' if s.is_active else 'btn-text' }}" type="button" hx-patch="/speakers/{{ s.id }}" hx-vals='{"is_active": {{ 'false' if s.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#speakers"><span class="icon">{{ 'toggle_on' if s.is_active else 'toggle_off' }}</span>{{ 'Active' if s.is_active else 'Inactive' }}</button>
+        <button class="btn {{ 'btn-tonal' if s.is_active else 'btn-text' }}" type="button" hx-patch="/speakers/{{ s.id }}" hx-vals='{"is_active": {{ 'false' if s.is_active else 'true' }}}' data-json data-ints="shift" hx-swap="none" data-refresh="#speakers"><span class="icon">{{ 'toggle_on' if s.is_active else 'toggle_off' }}</span>{{ 'Active' if s.is_active else 'Inactive' }}</button>
         <button class="btn btn-icon btn-danger" type="button" hx-delete="/speakers/{{ s.id }}" hx-confirm="Supprimer {{ s.name }} ?" hx-swap="none" data-refresh="#speakers" title="Supprimer"><span class="icon">delete</span></button>
     </div>
   </li>

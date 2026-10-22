@@ -4,21 +4,38 @@
 <h1>Musique</h1>
 <section class="card">
   <h2>Lecteurs</h2>
+  <div id="group-bar" class="player-ctl group-bar" hidden>
+    <span class="badge mono" id="sel-count">0</span>
+    <button class="btn btn-icon" type="button" data-group="previous" title="Précédent (sélection)"><span class="icon">skip_previous</span></button>
+    <button class="btn btn-icon btn-filled" type="button" data-group="resume" title="Lecture (sélection)"><span class="icon">play_arrow</span></button>
+    <button class="btn btn-icon btn-filled" type="button" data-group="pause" title="Pause (sélection)"><span class="icon">pause</span></button>
+    <button class="btn btn-icon" type="button" data-group="next" title="Suivant (sélection)"><span class="icon">skip_next</span></button>
+    <span class="icon vol">volume_up</span>
+    <input class="slider" type="range" id="group-volume" min="0" max="100" value="30" aria-label="Volume de la sélection">
+  </div>
   <div id="players" hx-get="/ui/music/players" hx-trigger="refresh, every 8s [!document.activeElement || document.activeElement.type !== 'range']" hx-swap="innerHTML">
     {% include "partials/players.html" %}
   </div>
 </section>
 <section class="card">
-  <h2>Recherche</h2>
-  <form class="row" hx-get="/ui/music/search" hx-target="#results" hx-indicator="#results">
-    <label class="field grow"><span>Titre, artiste, album…</span><input type="search" name="q" maxlength="200" required></label>
-    <label class="field"><span>Lire sur</span>
-      <select id="target-player">
-        {% for p in players if p.available %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
-      </select>
-    </label>
-    <button class="btn btn-filled" type="submit"><span class="icon">search</span>Rechercher</button>
-  </form>
-  <div id="results" class="results"></div>
+  <h2>En cours et file d'attente</h2>
+  <label class="field"><span>Lecteur</span><select id="queue-player" aria-label="Lecteur de la file"></select></label>
+  <div id="queue" hx-get="/ui/music/queue" hx-trigger="refresh, every 5s [!document.hidden && !document.querySelector('#queue .media:focus')]" hx-swap="innerHTML" hx-indicator="#queue">
+    {% include "partials/queue.html" %}
+  </div>
 </section>
+<section class="card">
+  <h2>Recherche</h2>
+  <label class="field"><span>Titre, artiste, album, playlist…</span><input type="search" id="search-q" maxlength="200" autocomplete="off"></label>
+  <p class="muted small">La lecture est lancée sur les lecteurs cochés ci-dessus.</p>
+  <div id="results" class="results" aria-live="polite"></div>
+</section>
+<dialog id="play-menu" class="menu">
+  <p class="mono" id="play-menu-title"></p>
+  <button class="btn btn-filled" type="button" data-opt="play"><span class="icon">play_arrow</span>Lire maintenant</button>
+  <button class="btn btn-tonal" type="button" data-opt="next"><span class="icon">playlist_play</span>Lire ensuite</button>
+  <button class="btn btn-tonal" type="button" data-opt="add"><span class="icon">playlist_add</span>Ajouter à la file</button>
+  <button class="btn btn-text" type="button" data-opt="">Annuler</button>
+</dialog>
 {% endblock %}
+{% block scripts %}<script src="/static/music.js" defer></script>{% endblock %}

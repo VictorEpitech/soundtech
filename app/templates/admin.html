@@ -30,6 +30,12 @@
 </section>
 
 <section class="card">
+  <h2>Modèles d'alerte</h2>
+  <p class="muted small">Un modèle par type d'incident : texte lu sur les enceintes et envoyé sur Teams.</p>
+  <div id="alert-templates" hx-get="/ui/admin/alert-templates" hx-trigger="load, refresh"></div>
+</section>
+
+<section class="card">
   <h2>Messages pré-enregistrés</h2>
   <form class="stack" hx-post="/presets" hx-ext="json-typed" data-json data-toast="Message créé" data-reset data-refresh="#presets" hx-swap="none">
     <label class="field"><span>Titre</span><input type="text" name="title" required maxlength="255"></label>

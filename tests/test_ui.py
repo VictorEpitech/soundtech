@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 import pytest
@@ -66,17 +67,50 @@ async def test_admin_access(client, make_user, login_as, fake_ma) -> None:
     assert 'href="/admin"' in (await client.get("/")).text
 
 
-async def test_music_fragments(client, make_user, login_as, fake_ma) -> None:
+async def _declare(db, **mapping: str | None) -> None:
+    from sqlalchemy import update
+
+    async with db() as s:
+        await s.execute(update(Speaker).values(ma_player_id=None))
+        for pid, name in mapping.items():
+            s.add(
+                Speaker(
+                    entity_id=f"media_player.uim_{uuid.uuid4().hex[:8]}",
+                    name=name,
+                    ma_player_id=pid,
+                )
+            )
+        await s.commit()
+
+
+async def test_music_fragments(client, make_user, login_as, fake_ma, db) -> None:
+    await _declare(db, p1="Grande salle", p2="Réfectoire")
     await login_as(await make_user(Role.staff))
     page = (await client.get("/music")).text
-    assert "Salon" in page and "Cuisine" in page and "/music/players/p1/pause" in page
-    assert "/music/players/p2/resume" in page
+    assert "Grande salle" in page and "Réfectoire" in page and "/music/players/p1/pause" in page
+    assert "Salon" not in page and "Cuisine" not in page
+    assert "/music/players/p2/resume" in page and 'data-sel="p1"' in page
     assert "Morceau &lt;b&gt;" in page
     res = await client.get("/ui/music/search", params={"q": "abc"})
-    assert "Titre abc" in res.text and 'data-play="lib://t/1"' in res.text
+    assert "Titre abc" in res.text and 'data-uri="lib://t/1"' in res.text
 
 
-async def test_music_unconfigured_is_graceful(client, make_user, login_as) -> None:
+async def test_music_only_declared_players(client, make_user, login_as, fake_ma, db) -> None:
+    await _declare(db, p2="Réfectoire")
+    await login_as(await make_user(Role.staff))
+    page = (await client.get("/ui/music/players")).text
+    assert "Réfectoire" in page and "/music/players/p1/" not in page
+
+
+async def test_music_no_declared_points_to_admin(client, make_user, login_as, fake_ma, db) -> None:
+    await _declare(db)
+    await login_as(await make_user(Role.staff))
+    page = (await client.get("/music")).text
+    assert "Admin" in page and "ma_player_id" in page and "Salon" not in page
+
+
+async def test_music_unconfigured_is_graceful(client, make_user, login_as, db) -> None:
+    await _declare(db, p1="X")
     await login_as(await make_user(Role.staff))
     r = await client.get("/music")
     assert r.status_code == 200 and "indisponible" in r.text
@@ -127,8 +161,8 @@ async def test_hx_unauthenticated_gets_401_not_redirect(client) -> None:
     assert r.status_code == 302 and r.headers["location"] == "/login"
 
 
-def test_incident_polling_does_not_replace_form() -> None:
+def test_incident_polling_does_not_replace_controls() -> None:
     from pathlib import Path
 
     html = (Path(__file__).resolve().parent.parent / "app/templates/alerts.html").read_text()
-    assert "every 5s" not in html and 'id="incident-form"' in html
+    assert "every 5s" not in html and 'id="alert-dialog"' in html

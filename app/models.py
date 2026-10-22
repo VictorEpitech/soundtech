@@ -208,3 +208,21 @@ class Response(Base):
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class AlertTemplate(Base):
+    """Modèle d'alerte : un par type d'incident (texte diffusé sur enceintes et Teams)."""
+
+    __tablename__ = "alert_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    type: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str] = mapped_column(String(60))
+    title: Mapped[str] = mapped_column(String(255))
+    message: Mapped[str] = mapped_column(Text)
+    icon: Mapped[str | None] = mapped_column(String(64))
+    color: Mapped[str | None] = mapped_column(String(7))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

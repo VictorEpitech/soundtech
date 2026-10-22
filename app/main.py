@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app.admin import router as admin_router
 from app.alerts.bot import router as bot_router
 from app.alerts.router import router as incidents_router
+from app.alerts.templates_api import router as alert_templates_router
 from app.auth.router import router as auth_router
 from app.bootstrap import ensure_bootstrap_admin
 from app.config import get_settings
@@ -45,6 +46,7 @@ app.include_router(presets_router)
 app.include_router(announcements_router)
 app.include_router(music_router)
 app.include_router(incidents_router)
+app.include_router(alert_templates_router)
 app.include_router(bot_router)
 register_ui(app)
 

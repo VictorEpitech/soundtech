@@ -222,9 +222,10 @@ async def test_alerts_ui(ha_api, fake_teams, make_user, login_as) -> None:
     await _login(make_user, login_as)
     inc = await _draft(ha_api, title="<b>x</b>", is_test=True)
     page = await ha_api.get("/alerts")
-    assert page.status_code == 200 and "test-banner" in page.text
+    assert page.status_code == 200 and "test-banner" in page.text and "alert-grid" in page.text
+    assert 'id="incident-form"' not in page.text and 'name="title"' not in page.text
     frag = (await ha_api.get("/ui/alerts/list")).text
-    assert f"/incidents/{inc['id']}/send" in frag and "&lt;b&gt;x" in frag and "TEST" in frag
+    assert f"/alerts/{inc['id']}" in frag and "&lt;b&gt;x" in frag and "TEST" in frag
 
 
 async def test_alerts_ui_anonymous(client) -> None:

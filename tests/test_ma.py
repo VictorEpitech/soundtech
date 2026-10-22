@@ -15,7 +15,7 @@ from app.ha.router import get_redis
 from app.ma import service as ma_service
 from app.ma.client import MAAuthError, MAClient, MACommandError, MAConnectionError, ws_url
 from app.main import app
-from app.models import Announcement, Priority, Role
+from app.models import Announcement, Priority, Role, Speaker
 from tests.helpers import _settings
 from tests.test_ha import TEST_REDIS, _eid, mock_ha, redis  # noqa: F401
 
@@ -25,6 +25,22 @@ TOKEN = "ma-secret"
 PLAYERS = [
     {"player_id": "p1", "display_name": "Salon", "playback_state": "playing", "volume_level": 30},
     {"player_id": "p2", "display_name": "Cuisine", "playback_state": "idle", "volume_level": 10},
+]
+
+
+QUEUE_ITEMS = [
+    {
+        "queue_item_id": "qa",
+        "name": "Un",
+        "duration": 61,
+        "media_item": {"artists": [{"name": "A"}]},
+    },
+    {
+        "queue_item_id": "qb",
+        "name": "Deux",
+        "duration": 120,
+        "image": {"provider": "plex", "path": "/p/1"},
+    },
 ]
 
 
@@ -67,6 +83,10 @@ class FakeMA:
                 await ws.send(json.dumps({"message_id": mid, "error_code": 999, "details": "no"}))
             elif cmd == "players/all":
                 await ws.send(json.dumps({"message_id": mid, "result": PLAYERS}))
+            elif cmd == "player_queues/get":
+                await ws.send(json.dumps({"message_id": mid, "result": {"current_index": 1}}))
+            elif cmd == "player_queues/items":
+                await ws.send(json.dumps({"message_id": mid, "result": QUEUE_ITEMS}))
             elif cmd == "music/search":
                 res = {
                     "tracks": [
@@ -101,8 +121,25 @@ def _ma_settings(fake: FakeMA) -> Settings:
     return _settings().model_copy(update={"ma_url": fake.url, "ma_token": SecretStr(TOKEN)})
 
 
+@pytest_asyncio.fixture
+async def declared(db) -> None:
+    """p1 active, p2 inactive ; p3 inconnue."""
+    from sqlalchemy import update
+
+    async with db() as s:
+        await s.execute(update(Speaker).values(ma_player_id=None))
+        s.add_all(
+            [
+                Speaker(entity_id=_eid(), name="Grande salle", ma_player_id="p1"),
+                Speaker(entity_id=_eid(), name="Off", ma_player_id="p2", is_active=False),
+                Speaker(entity_id=_eid(), name="Sans MA"),
+            ]
+        )
+        await s.commit()
+
+
 @pytest.fixture
-def music_api(client: AsyncClient, fake_ma: FakeMA) -> AsyncClient:
+def music_api(client: AsyncClient, fake_ma: FakeMA, declared: None) -> AsyncClient:
     app.dependency_overrides[get_settings] = lambda: _ma_settings(fake_ma)
     return client
 
@@ -155,7 +192,9 @@ async def test_client_errors(fake_ma: FakeMA) -> None:
 # --- API --------------------------------------------------------------------
 
 
-async def test_music_roles_and_503(client: AsyncClient, make_user, login_as, fake_ma) -> None:
+async def test_music_roles_and_503(
+    client: AsyncClient, make_user, login_as, fake_ma, declared
+) -> None:
     assert (await client.get("/music/players")).status_code == 401
     await login_as(await make_user(Role.staff))
     r = await client.get("/music/players")  # MA non configuré
@@ -182,9 +221,10 @@ async def test_music_student_refused(music_api, make_user) -> None:
 async def test_music_routes(music_api, make_user, login_as, fake_ma) -> None:
     await login_as(await make_user(Role.staff))
     r = await music_api.get("/music/players")
+    assert [p["id"] for p in r.json()] == ["p1"]  # p2 inactive, non déclarés ignorés
     assert r.json()[0] == {
         "id": "p1",
-        "name": "Salon",
+        "name": "Grande salle",
         "available": True,
         "state": "playing",
         "volume": 30,
@@ -192,7 +232,13 @@ async def test_music_routes(music_api, make_user, login_as, fake_ma) -> None:
     }
     r = await music_api.get("/music/search", params={"q": "abc", "media_types": ["track"]})
     assert r.json()["tracks"] == [
-        {"uri": "lib://t/1", "name": "Song", "media_type": "track", "artists": ["A"]}
+        {
+            "uri": "lib://t/1",
+            "name": "Song",
+            "media_type": "track",
+            "artists": ["A"],
+            "image": None,
+        }
     ]
     assert (await music_api.get("/music/search")).status_code == 422
     assert (
@@ -219,7 +265,31 @@ async def test_music_routes(music_api, make_user, login_as, fake_ma) -> None:
     assert (await music_api.post(f"{p}/next")).status_code == 502
 
 
-async def test_music_unreachable_503(client, make_user, login_as) -> None:
+async def test_music_undeclared_player_refused(music_api, make_user, login_as, fake_ma) -> None:
+    await login_as(await make_user(Role.staff))
+    n = len(fake_ma.cmds)
+    for pid in ("p2", "p3"):  # inactive / inconnu
+        p = f"/music/players/{pid}"
+        assert (await music_api.post(f"{p}/play", json={"uri": "lib://t/1"})).status_code == 403
+        assert (await music_api.post(f"{p}/volume", json={"level": 5})).status_code == 403
+        for name in ("pause", "next", "previous", "resume"):
+            assert (await music_api.post(f"{p}/{name}")).status_code == 403
+    assert len(fake_ma.cmds) == n  # rien n'a atteint MA
+
+
+async def test_music_no_declared_player(client, make_user, login_as, fake_ma, db) -> None:
+    from sqlalchemy import update
+
+    async with db() as s:
+        await s.execute(update(Speaker).values(ma_player_id=None))
+        await s.commit()
+    app.dependency_overrides[get_settings] = lambda: _ma_settings(fake_ma)
+    await login_as(await make_user(Role.staff))
+    assert (await client.get("/music/players")).json() == []
+    assert (await client.post("/music/players/p1/pause")).status_code == 403
+
+
+async def test_music_unreachable_503(client, make_user, login_as, declared) -> None:
     app.dependency_overrides[get_settings] = lambda: _settings().model_copy(
         update={"ma_url": "http://127.0.0.1:1", "ma_timeout": 1.0}
     )

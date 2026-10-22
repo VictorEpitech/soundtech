@@ -17,7 +17,7 @@ from app.auth import audit
 from app.auth.deps import get_session, require_role
 from app.config import Settings, get_settings
 from app.ha.router import get_redis
-from app.models import Incident, IncidentType, Role, User
+from app.models import AlertTemplate, Incident, IncidentType, Role, User
 
 staff_up = require_role(Role.admin, Role.staff)
 
@@ -91,6 +91,32 @@ async def _rate_limit(redis: Redis, settings: Settings, user: User, action: str)
         raise HTTPException(429, "too many requests")
 
 
+def _dedup_key(user: User, type_: str, is_test: bool) -> str:
+    return f"dedup:incidents:from-template:{user.id}:{type_}:{int(is_test)}"
+
+
+async def _dedup_acquire(redis: Redis, user: User, type_: str, is_test: bool) -> str | None:
+    """Verrou 15 s anti-doublon. Fail-open si Redis est indisponible. Renvoie la clé posée."""
+    key = _dedup_key(user, type_, is_test)
+    try:
+        ok = await redis.set(key, "1", nx=True, ex=15)
+    except Exception:
+        log.warning("dedup lock unavailable", exc_info=True)
+        return None
+    if not ok:
+        raise HTTPException(409, "envoi identique déjà en cours/récent")
+    return key
+
+
+async def _dedup_release(redis: Redis, key: str | None) -> None:
+    if key is None:
+        return
+    try:
+        await redis.delete(key)
+    except Exception:
+        log.warning("dedup lock release failed", exc_info=True)
+
+
 async def _get(session: AsyncSession, incident_id: uuid.UUID) -> Incident:
     i = await session.get(Incident, incident_id)
     if i is None:
@@ -98,24 +124,25 @@ async def _get(session: AsyncSession, incident_id: uuid.UUID) -> Incident:
     return i
 
 
-@router.post("", status_code=201)
-async def create_incident(
-    body: IncidentIn,
+async def _create_draft(
+    session: AsyncSession,
+    settings: Settings,
     request: Request,
-    session: AsyncSession = Depends(get_session),
-    redis: Redis = Depends(get_redis),
-    settings: Settings = Depends(get_settings),
-    user: User = Depends(staff_up),
-) -> dict[str, Any]:
-    await _rate_limit(redis, settings, user, "create")
-    if len(body.message) > settings.announcement_max_length:
+    user: User,
+    *,
+    type_: str,
+    title: str,
+    message: str,
+    is_test: bool,
+) -> Incident:
+    if len(message) > settings.announcement_max_length:
         raise HTTPException(422, f"message too long (max {settings.announcement_max_length})")
     i = Incident(
         id=uuid.uuid4(),
-        type=body.type.value,
-        title=body.title,
-        message=body.message,
-        is_test=body.is_test,
+        type=type_,
+        title=title,
+        message=message,
+        is_test=is_test,
         status="draft",
         created_by=user.id,
         created_by_email=user.email,
@@ -131,7 +158,126 @@ async def create_incident(
         detail={"incident_id": str(i.id), "type": i.type, "is_test": i.is_test},
     )
     await session.refresh(i)
+    return i
+
+
+async def _confirmed_send(
+    session: AsyncSession,
+    redis: Redis,
+    settings: Settings,
+    notifier: TeamsNotifier,
+    request: Request,
+    user: User,
+    incident: Incident,
+    confirm: str,
+) -> dict[str, Any]:
+    if confirm != service.expected_confirm(settings, incident):
+        audit.record(
+            session,
+            "incident_send_refused",
+            request=request,
+            user_id=user.id,
+            actor=user.email,
+            detail={"incident_id": str(incident.id)},
+        )
+        await session.commit()
+        raise HTTPException(422, "confirmation text mismatch")
+    try:
+        sent = await service.send(session, redis, settings, notifier, incident.id, user, request)
+    except service.AlertError as e:
+        raise HTTPException(e.status, e.detail) from None
+    out = _out(sent)
+    if sent.status == "failed":
+        raise HTTPException(
+            502, "alert delivery failed on all channels (tts, teams): retry possible"
+        )
+    return out
+
+
+@router.post("", status_code=201)
+async def create_incident(
+    body: IncidentIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+    settings: Settings = Depends(get_settings),
+    user: User = Depends(staff_up),
+) -> dict[str, Any]:
+    await _rate_limit(redis, settings, user, "create")
+    i = await _create_draft(
+        session,
+        settings,
+        request,
+        user,
+        type_=body.type.value,
+        title=body.title,
+        message=body.message,
+        is_test=body.is_test,
+    )
     return _out(i)
+
+
+class FromTemplateIn(BaseModel):
+    type: IncidentType
+    is_test: bool = False
+    confirm: str = Field(max_length=64)
+
+
+@router.post("/from-template")
+async def send_from_template(
+    body: FromTemplateIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+    settings: Settings = Depends(get_settings),
+    notifier: TeamsNotifier = Depends(get_teams_notifier),
+    user: User = Depends(staff_up),
+) -> dict[str, Any]:
+    """Brouillon depuis le modèle actif du type, puis envoi par le flux confirmé habituel.
+
+    Le texte vient exclusivement du modèle (pas de texte libre) ; la confirmation est vérifiée
+    avant toute création, avec les mêmes mots que l'envoi classique (ALERTE / TEST).
+    """
+    await _rate_limit(redis, settings, user, "create")
+    await _rate_limit(redis, settings, user, "send")
+    tpl = await session.scalar(
+        select(AlertTemplate).where(
+            AlertTemplate.type == body.type.value, AlertTemplate.is_active.is_(True)
+        )
+    )
+    if tpl is None:
+        raise HTTPException(404, "alert template not found or inactive")
+    expected = settings.alert_test_confirm_text if body.is_test else settings.alert_confirm_text
+    if body.confirm != expected:
+        audit.record(
+            session,
+            "incident_send_refused",
+            request=request,
+            user_id=user.id,
+            actor=user.email,
+            detail={"type": tpl.type, "is_test": body.is_test},
+        )
+        await session.commit()
+        raise HTTPException(422, "confirmation text mismatch")
+    lock = await _dedup_acquire(redis, user, tpl.type, body.is_test)
+    try:
+        incident = await _create_draft(
+            session,
+            settings,
+            request,
+            user,
+            type_=tpl.type,
+            title=tpl.title,
+            message=tpl.message,
+            is_test=body.is_test,
+        )
+        await session.commit()
+        return await _confirmed_send(
+            session, redis, settings, notifier, request, user, incident, body.confirm
+        )
+    except BaseException:
+        await _dedup_release(redis, lock)
+        raise
 
 
 @router.get("")
@@ -167,27 +313,9 @@ async def send_incident(
 ) -> dict[str, Any]:
     await _rate_limit(redis, settings, user, "send")
     incident = await _get(session, incident_id)
-    if body.confirm != service.expected_confirm(settings, incident):
-        audit.record(
-            session,
-            "incident_send_refused",
-            request=request,
-            user_id=user.id,
-            actor=user.email,
-            detail={"incident_id": str(incident_id)},
-        )
-        await session.commit()
-        raise HTTPException(422, "confirmation text mismatch")
-    try:
-        sent = await service.send(session, redis, settings, notifier, incident_id, user, request)
-    except service.AlertError as e:
-        raise HTTPException(e.status, e.detail) from None
-    out = _out(sent)
-    if sent.status == "failed":
-        raise HTTPException(
-            502, "alert delivery failed on all channels (tts, teams): retry possible"
-        )
-    return out
+    return await _confirmed_send(
+        session, redis, settings, notifier, request, user, incident, body.confirm
+    )
 
 
 @router.post("/{incident_id}/close")

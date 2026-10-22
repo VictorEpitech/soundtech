@@ -1,10 +1,40 @@
 {% extends "base.html" %}
-{% block title %}Réponses · {{ incident.title }}{% endblock %}
+{% block title %}Alerte · {{ incident.title }}{% endblock %}
 {% block content %}
 <p><a class="btn btn-text" href="/alerts"><span class="icon">arrow_back</span>Alertes</a></p>
 <h1>{{ incident.title }}</h1>
-{% if incident.is_test %}<p class="banner-test"><span class="icon">science</span>TEST</p>{% endif %}
-<p class="muted"><span class="badge mono incident-{{ incident.status }}">{{ incident.status }}</span> {{ incident.message }}</p>
+{% if incident.is_test %}<p class="banner-test"><span class="icon">science</span>TEST (exercice)</p>{% endif %}
+<section class="card">
+  <div class="row between">
+    <div class="row">
+      <span class="badge mono {{ 'mode-test' if incident.is_test else 'mode-real' }}">{{ 'TEST' if incident.is_test else 'RÉEL' }}</span>
+      <span class="badge mono incident-{{ incident.status }}">{{ incident.status }}</span>
+      <span class="muted small mono">{{ incident.type }}</span>
+    </div>
+    {% if incident.status in ('sent', 'failed') %}
+    <button class="btn btn-tonal" type="button" hx-post="/incidents/{{ incident.id }}/close" hx-confirm="Clore cet incident ?" hx-swap="none" data-toast="Incident clos" data-reload><span class="icon">check_circle</span>Clore l'incident</button>
+    {% endif %}
+  </div>
+  <h2>Message diffusé</h2>
+  <p class="ad-message">{{ incident.message }}</p>
+  <h2>Chronologie</h2>
+  <ul class="list timeline">
+    <li><span class="icon">edit_note</span> Créé le <span class="mono">{{ incident.created_at[:19] | replace('T', ' ') if incident.created_at else '—' }}</span>{% if incident.created_by_email %} par {{ incident.created_by_email }}{% endif %}</li>
+    <li><span class="icon">notifications_active</span> {% if incident.sent_at %}Envoyé le <span class="mono">{{ incident.sent_at[:19] | replace('T', ' ') }}</span>{% else %}Pas encore envoyé{% endif %}</li>
+    <li><span class="icon">check_circle</span> {% if incident.closed_at %}Clos le <span class="mono">{{ incident.closed_at[:19] | replace('T', ' ') }}</span>{% if incident.closed_by_email %} par {{ incident.closed_by_email }}{% endif %}{% else %}Non clos{% endif %}</li>
+  </ul>
+  <h2>Diffusion</h2>
+  {% set d = incident.delivery %}
+  {% if d %}
+  <p>Enceintes :
+    {% if d.tts and d.tts.ok %}<span class="status-done">ok</span>{% else %}<span class="status-failed">échec ({{ d.tts.error if d.tts else '?' }})</span>{% endif %}
+    {% if speakers %}<span class="muted small">— {{ speakers | join(', ') }}</span>{% endif %}</p>
+  <p>Teams :
+    {% if d.teams and d.teams.ok %}<span class="status-done">{{ 'ignoré' if d.teams.skipped else 'ok' }}</span>{% else %}<span class="status-failed">échec ({{ d.teams.error if d.teams else '?' }})</span>{% endif %}</p>
+  {% else %}
+  <p class="muted">Aucune diffusion enregistrée.</p>
+  {% endif %}
+</section>
 <section class="card">
   <div class="row between">
     <h2>Réponses</h2>
@@ -18,3 +48,4 @@
   <div id="responses" hx-get="/ui/alerts/{{ incident.id }}/responses" hx-trigger="load, refresh" data-sse="/incidents/{{ incident.id }}/stream"></div>
 </section>
 {% endblock %}
+{% block scripts %}<script src="/static/alerts.js" defer></script>{% endblock %}

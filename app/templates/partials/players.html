@@ -1,12 +1,17 @@
 {% if error %}
 <p class="alert" role="alert"><span class="icon">cloud_off</span>Music Assistant indisponible : {{ error }}</p>
+{% elif undeclared %}
+<p class="muted">Aucune enceinte n'est reliée à un lecteur Music Assistant. Renseignez <span class="mono">ma_player_id</span> dans <a href="/admin">Admin → Enceintes</a>.</p>
 {% elif not players %}
+<p class="muted">Aucun lecteur disponible.</p>
+{% elif false %}
 <p class="muted">Aucun lecteur.</p>
 {% else %}
 <ul class="list">
   {% for p in players %}
   <li class="player {% if not p.available %}is-off{% endif %}">
     <div class="player-info">
+      <label class="check"><input type="checkbox" data-sel="{{ p.id }}" aria-label="Sélectionner {{ p.name }}"><span></span></label>
       <strong>{{ p.name }}</strong>
       <span class="badge mono">{{ p.state or '—' }}</span>
       <span class="muted small">{{ p.current or '' }}</span>
