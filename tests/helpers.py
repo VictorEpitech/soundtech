@@ -27,6 +27,8 @@ def _settings() -> Settings:
         entra_client_secret="secret",
         public_base_url="https://sound.test",
         jwt_secret="x" * 40,
+        alert_force_volume=False,  # le forçage de volume a ses propres tests (test_volume.py)
+        announce_force_volume=False,
     )
 
 

@@ -1,0 +1,37 @@
+<div class="row between">
+  <div>
+    <strong>Jours fériés français</strong>
+    <p class="muted small">Calculés automatiquement (Pâques et dérivés comprises).</p>
+  </div>
+  <button class="btn {{ 'btn-tonal' if cal.observe_holidays else 'btn-text' }}" type="button" hx-put="/closures/settings" hx-vals='{"observe_holidays": {{ 'false' if cal.observe_holidays else 'true' }}}' data-json hx-swap="none" data-refresh="#closures"><span class="icon">{{ 'toggle_on' if cal.observe_holidays else 'toggle_off' }}</span>{{ 'Fériés pris en compte' if cal.observe_holidays else 'Fériés ignorés' }}</button>
+</div>
+<details>
+  <summary class="small">Fériés {{ cal.year }} et {{ cal.year + 1 }}</summary>
+  <ul class="small mono">
+    {% for h in cal.holidays + next_holidays %}<li>{{ h.date }} — {{ h.label }}</li>{% endfor %}
+  </ul>
+</details>
+
+<form class="row" hx-post="/closures" hx-ext="json-typed" data-json data-toast="Plage ajoutée" data-reset data-refresh="#closures" hx-swap="none">
+  <label class="field grow"><span>Libellé</span><input type="text" name="label" required maxlength="100" placeholder="Vacances de Noël"></label>
+  <label class="field"><span>Type</span>
+    <select name="kind">{% for v, l in kinds %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
+  </label>
+  <label class="field"><span>Du</span><input type="date" name="start_date" required></label>
+  <label class="field"><span>Au (inclus)</span><input type="date" name="end_date" required></label>
+  <button class="btn btn-filled" type="submit"><span class="icon">add</span>Ajouter</button>
+</form>
+
+<ul class="list">
+  {% for c in cal.closures %}
+  <li class="row between">
+    <span><strong>{{ c.label }}</strong> <span class="badge mono">{{ c.kind }}</span><br><span class="small mono">{{ c.start_date }} → {{ c.end_date }}</span></span>
+    <span class="row">
+      <button class="btn {{ 'btn-tonal' if c.is_active else 'btn-text' }}" type="button" hx-patch="/closures/{{ c.id }}" hx-vals='{"is_active": {{ 'false' if c.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#closures"><span class="icon">{{ 'toggle_on' if c.is_active else 'toggle_off' }}</span>{{ 'Actif' if c.is_active else 'Inactif' }}</button>
+      <button class="btn btn-icon btn-danger" type="button" hx-delete="/closures/{{ c.id }}" hx-confirm="Supprimer {{ c.label }} ?" hx-swap="none" data-refresh="#closures" title="Supprimer"><span class="icon">delete</span></button>
+    </span>
+  </li>
+  {% else %}
+  <li class="muted">Aucune plage saisie.</li>
+  {% endfor %}
+</ul>

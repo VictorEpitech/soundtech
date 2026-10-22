@@ -1,0 +1,19 @@
+{% if not rows %}
+<p class="muted">Aucune exécution.</p>
+{% else %}
+<div class="table-wrap">
+<table class="table">
+  <thead><tr><th>Prévu à (UTC)</th><th>Planification</th><th>Statut</th><th>Détail</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td class="mono">{{ r.scheduled_for[:16] | replace('T', ' ') }}</td>
+    <td>{{ r.schedule_name }}{% if r.trigger == 'manual' %} <span class="badge mono">manuel</span>{% endif %}</td>
+    <td><span class="badge mono status-{{ r.status }}">{{ r.status }}</span></td>
+    <td class="small">{{ r.detail or '' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}

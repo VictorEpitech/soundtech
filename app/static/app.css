@@ -230,6 +230,9 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 }
 .status-done { color: var(--ok); }
 .status-failed { color: var(--error); }
+.status-ok { color: var(--ok); }
+.status-missed { color: var(--error); }
+.status-skipped_closure, .status-skipped_alert { color: var(--on-surface-variant); }
 
 .alert {
   display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin: 0;

@@ -19,6 +19,8 @@ from app.groups import router as groups_router
 from app.ha.router import announcements_router, presets_router, speakers_router
 from app.logging import setup_logging
 from app.ma.router import router as music_router
+from app.planning.router import closures_router
+from app.planning.router import router as schedules_router
 from app.scenes import router as scenes_router
 from app.ui.router import register as register_ui
 
@@ -51,6 +53,8 @@ app.include_router(incidents_router)
 app.include_router(alert_templates_router)
 app.include_router(groups_router)
 app.include_router(scenes_router)
+app.include_router(schedules_router)
+app.include_router(closures_router)
 app.include_router(bot_router)
 register_ui(app)
 

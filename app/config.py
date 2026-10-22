@@ -1,7 +1,7 @@
 import re
 from functools import lru_cache
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +38,17 @@ class Settings(BaseSettings):
     announce_default_lang: str | None = None
     announce_wpm: int = 150
 
+    # Volume forcé pendant la diffusion, restauré ensuite (0 = ne pas forcer)
+    alert_force_volume: bool = True
+    alert_volume: int = Field(default=100, ge=0, le=100)
+    announce_force_volume: bool = True
+    announce_volume: int = Field(default=100, ge=0, le=100)
+    volume_settle: float = Field(default=0.5, ge=0, le=10)
+    volume_restore_margin: float = Field(default=3.0, ge=0, le=60)
+    volume_restore_max_wait: float = Field(default=120.0, ge=1, le=900)
+    volume_restore_retries: int = Field(default=3, ge=1, le=10)
+    volume_state_ttl: int = Field(default=3600, ge=60)
+
     ma_url: str = ""
     ma_token: SecretStr = SecretStr("")
     ma_timeout: float = 10.0
@@ -58,6 +69,8 @@ class Settings(BaseSettings):
     rl_music_image_limit: int = 600
     ma_image_max_bytes: int = 2_000_000
     rl_webhook_limit: int = 3000
+    rl_planning_limit: int = 60
+    rl_planning_run_limit: int = 10
 
     teams_app_id: str = ""
     teams_app_secret: SecretStr = SecretStr("")

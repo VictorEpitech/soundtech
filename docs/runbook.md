@@ -9,6 +9,14 @@ Stack `sound` (Portainer, dépôt Git). Services : `api`, `worker`, `db`, `redis
 3. Vérifier : `https://<DOMAIN>/healthz` (liveness), `/readyz` (Postgres + Redis), tous les conteneurs `healthy`.
 4. Mise à jour : push puis « Pull and redeploy ».
 
+## Volume des enceintes (forçage / restauration)
+
+Symptôme : une enceinte reste à 100 % après une annonce ou une alerte.
+1. Chercher dans les logs worker `RESTAURATION ECHOUEE` / `volume <entity>` et dans l'audit `volume_restore_failed` (l'annonce porte `results._volume`).
+2. Le worker retente toutes les 15 s tant que l'état Redis existe (TTL `VOLUME_STATE_TTL`, 1 h) : vérifier HA joignable (token, `media_player.volume_set` manuel dans Outils de développement).
+3. Si l'état est perdu ou le volume d'origine était inconnu (log `volume d'origine inconnu`) : remettre le volume à la main (app Alexa ou HA), puis `redis-cli --scan --pattern 'sound:vol:*'` pour repérer un état résiduel ; le supprimer (`DEL sound:vol:<entity>:orig sound:vol:<entity>:leases`, `SREM sound:vol:active <entity>`) pour repartir propre.
+4. Urgence : `ALERT_FORCE_VOLUME=false` / `ANNOUNCE_FORCE_VOLUME=false` (ou `*_VOLUME=0`) désactive le forçage sans toucher aux diffusions.
+
 ## Rollback
 
 1. Identifier le dernier commit sain (`git log`).
@@ -71,3 +79,14 @@ Les réponses étudiants sont purgées automatiquement chaque jour à 03:15 (cro
 - Modifier la durée : variable Portainer + redeploy.
 - Purge immédiate : abaisser temporairement `RESPONSE_RETENTION_DAYS`, redéployer, attendre 03:15 (ou redémarrer le worker selon la config cron), vérifier l'entrée d'audit.
 - Les sauvegardes contiennent les réponses jusqu'à expiration de `BACKUP_RETENTION_DAYS` : en cas de demande d'effacement, supprimer aussi les dumps concernés du volume `backups`.
+
+## Planification
+
+Le worker exécute le cron `run_schedules` chaque minute ; journal : Admin > Planification (ou `GET /schedules/runs`).
+
+- **Worker arrêté** : aucune échéance n'est exécutée. Au redémarrage, une échéance en retard de moins de 5 min est exécutée, les plus anciennes (fenêtre 24 h) sont journalisées `missed` sans être jouées. Pour rattraper un message important : bouton « Exécuter maintenant » (admin).
+- **Redémarrage pendant une exécution** : la ligne reste `running` puis devient `failed / interrompue` après 10 min ; elle n'est jamais rejouée automatiquement. Vérifier la diffusion, relancer à la main si besoin.
+- **Rien ne part** : worker actif (`docker compose logs worker`, cron `run_schedules`), planification active, jour non fermé (fériés/vacances), pas d'incident `sent` (`skipped_alert`), HA/MA configurés (`failed` + détail), heure et fuseau (aperçu des 10 prochaines exécutions).
+- **Doublon suspecté** : impossible par construction (contrainte `UNIQUE (schedule_id, scheduled_for)`) ; deux lignes `schedule` à des heures différentes viennent d'une modification de l'heure.
+- **Heure d'été/hiver** : 02:30 le jour du passage à l'heure d'été s'exécute à 03:30 ; à l'heure d'hiver, une seule fois.
+- **Alerte en cours** : les planifications sont ignorées (`skipped_alert`), jamais reportées.

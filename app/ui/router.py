@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,9 +21,11 @@ from app.auth.deps import get_session
 from app.config import Settings, get_settings
 from app.ha import history as history_api
 from app.ha import router as ha_api
+from app.ha import service as ha_service
 from app.ma import router as ma_api
-from app.models import Announcement, Role, User
+from app.models import Announcement, Priority, Role, ScheduleRunStatus, User
 from app.models import Response as ResponseRow
+from app.planning import router as planning_api
 from app.ui.deps import PageError, PageRedirect, admin_page, optional_user, staff_page
 
 BASE = Path(__file__).resolve().parent.parent
@@ -119,6 +122,7 @@ async def announce_page(
         groups=grp,
         voices=settings.announce_voices,
         langs=settings.announce_langs,
+        volume_level=ha_service.volume_level(settings, Priority.staff),
         defaults=await ha_api.get_defaults(session, settings),
         all_groups=_group_rows(await groups_api.list_groups(session)),
         all_speakers=await ha_api.list_speakers(session, user),
@@ -184,6 +188,23 @@ async def admin_home(
         voices=settings.announce_voices,
         langs=settings.announce_langs,
         defaults=await ha_api.get_defaults(session, settings),
+    )
+
+
+@router.get("/admin/planning")
+async def planning_page(
+    request: Request,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    schedules = await planning_api.list_schedules(session, user)
+    return render(
+        request,
+        "planning.html",
+        user,
+        active="admin",
+        schedules=schedules,
+        statuses=[s.value for s in ScheduleRunStatus if s is not ScheduleRunStatus.running],
     )
 
 
@@ -420,3 +441,81 @@ async def responses_fragment(
         return _fragment_error(request, e)
     data, _ = await responses_svc.report(session, roster, incident_id)
     return render(request, "partials/responses.html", user, data=data, incident_id=incident_id)
+
+
+DAY_LABELS = (
+    ("1", "Lun"),
+    ("2", "Mar"),
+    ("3", "Mer"),
+    ("4", "Jeu"),
+    ("5", "Ven"),
+    ("6", "Sam"),
+    ("7", "Dim"),
+)
+CLOSURE_KINDS = (("vacances", "Vacances"), ("fermeture", "Fermeture"), ("ferie", "Jour férié"))
+ACTION_LABELS = {"announcement": "Annonce", "scene": "Scène", "stop": "Pause / extinction"}
+
+
+@router.get("/ui/planning/schedules")
+async def schedules_fragment(
+    request: Request,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    return render(
+        request,
+        "partials/schedules.html",
+        user,
+        rows=await planning_api.list_schedules(session, user),
+        speakers=[s for s in await ha_api.list_speakers(session, user) if s["is_active"]],
+        groups=[g for g in _group_rows(await groups_api.list_groups(session)) if g["is_active"]],
+        scenes=[s for s in await scenes_api.list_scenes(session) if s["is_active"]],
+        presets=[p for p in await ha_api.list_presets(session, user) if p["is_active"]],
+        voices=settings.announce_voices,
+        langs=settings.announce_langs,
+        days=DAY_LABELS,
+        action_labels=ACTION_LABELS,
+    )
+
+
+@router.get("/ui/planning/preview/{schedule_id}")
+async def schedule_preview_fragment(
+    request: Request,
+    schedule_id: uuid.UUID,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    data = await planning_api.preview(schedule_id, session, user)
+    return render(request, "partials/schedule_preview.html", user, data=data)
+
+
+@router.get("/ui/planning/closures")
+async def closures_fragment(
+    request: Request,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    year = datetime.now(UTC).year
+    cal = await planning_api.get_calendar(year, session, user)
+    nxt = planning_api.holidays_out(year + 1)
+    return render(
+        request, "partials/closures.html", user, cal=cal, next_holidays=nxt, kinds=CLOSURE_KINDS
+    )
+
+
+@router.get("/ui/planning/runs")
+async def runs_fragment(
+    request: Request,
+    schedule_id: str = "",
+    status: str = "",
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    try:
+        sid = uuid.UUID(schedule_id) if schedule_id else None
+        st = ScheduleRunStatus(status) if status else None
+    except ValueError:
+        raise HTTPException(422, "invalid filter") from None
+    rows = await planning_api.list_runs(sid, st, 50, session, user)
+    return render(request, "partials/schedule_runs.html", user, rows=rows)

@@ -34,6 +34,7 @@ from app.models import (
     AnnouncementStatus,
     Incident,
     Preset,
+    Priority,
     Role,
     Scene,
     Speaker,
@@ -344,20 +345,23 @@ async def _safe_play(ma: MAClient, player_id: str, sc: Scene) -> str | None:
     return None
 
 
-@router.post("/{scene_id}/launch")
-async def launch(
-    scene_id: uuid.UUID,
-    request: Request,
-    session: AsyncSession = Depends(get_session),
-    user: User = Depends(music_user),
-    ma: MAClient = Depends(get_ma),
-    declared: dict[str, str] = Depends(declared_players),
-    settings: Settings = Depends(get_settings),
-    redis: Redis = Depends(get_redis),
+async def launch_scene(
+    session: AsyncSession,
+    sc: Scene,
+    *,
+    redis: Redis,
+    settings: Settings,
+    ma: MAClient,
+    declared: dict[str, str],
+    author: User | None,
+    priority: Priority,
+    audit_user_id: uuid.UUID | None,
+    audit_actor: str | None,
+    request: Request | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    sc = await session.get(Scene, scene_id)
-    if sc is None:
-        raise HTTPException(404, "scene not found")
+    """Lancement d'une scène (HTTP et planification) ; lève HTTPException 409/502."""
+    extra = extra or {}
     if not sc.is_active:
         raise HTTPException(409, "scene is inactive")
     if await _incident_in_progress(session):
@@ -380,8 +384,8 @@ async def launch(
                 text=preset.text,
                 speakers=targets,
                 is_test=False,
-                priority=ha_service.priority_for(user),
-                author=user,
+                priority=priority,
+                author=author,
             )
             try:
                 await ha_service.submit(session, redis, ann, request=request)
@@ -401,13 +405,14 @@ async def launch(
             session,
             "scene_launch_refused",
             request=request,
-            user_id=user.id,
-            actor=user.email,
+            user_id=audit_user_id,
+            actor=audit_actor,
             detail={
                 "scene_id": str(sc.id),
                 "name": sc.name,
                 "reason": "incident",
                 "announcement_id": ann_id,
+                **extra,
             },
         )
         await session.commit()
@@ -424,8 +429,8 @@ async def launch(
         session,
         "scene_launch",
         request=request,
-        user_id=user.id,
-        actor=user.email,
+        user_id=audit_user_id,
+        actor=audit_actor,
         detail={
             "scene_id": str(sc.id),
             "name": sc.name,
@@ -435,6 +440,7 @@ async def launch(
             "failed": len(failed),
             "announcement_id": ann_id,
             "announcement": announcement,
+            **extra,
         },
     )
     if not ok:
@@ -447,3 +453,32 @@ async def launch(
         "partial": bool(failed),
         "announcement": announcement,
     }
+
+
+@router.post("/{scene_id}/launch")
+async def launch(
+    scene_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(music_user),
+    ma: MAClient = Depends(get_ma),
+    declared: dict[str, str] = Depends(declared_players),
+    settings: Settings = Depends(get_settings),
+    redis: Redis = Depends(get_redis),
+) -> dict[str, Any]:
+    sc = await session.get(Scene, scene_id)
+    if sc is None:
+        raise HTTPException(404, "scene not found")
+    return await launch_scene(
+        session,
+        sc,
+        redis=redis,
+        settings=settings,
+        ma=ma,
+        declared=declared,
+        author=user,
+        priority=ha_service.priority_for(user),
+        audit_user_id=user.id,
+        audit_actor=user.email,
+        request=request,
+    )

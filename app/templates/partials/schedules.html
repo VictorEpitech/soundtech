@@ -1,0 +1,89 @@
+<form class="stack" data-planning-form hx-post="/schedules" hx-ext="json-typed" data-json data-arrays="days,group_ids,speaker_ids" data-bools="is_test,respect_closures" data-ints="stop_volume" data-toast="Planification créée" data-reset data-refresh="#schedules" hx-swap="none">
+  <div class="row">
+    <label class="field grow"><span>Nom</span><input type="text" name="name" required maxlength="100"></label>
+    <label class="field"><span>Action</span>
+      <select name="action">{% for k, l in action_labels.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select>
+    </label>
+  </div>
+  <div class="row">
+    <label class="field"><span>Récurrence</span>
+      <select data-role="recurrence"><option value="weekly">Chaque semaine</option><option value="once">Une seule fois</option></select>
+    </label>
+    <label class="field"><span>Heure</span><input class="mono" type="time" name="time_of_day" required></label>
+    <label class="field" data-show-rec="once" hidden><span>Date</span><input type="date" name="once_date" required></label>
+    <label class="field"><span>Fuseau</span><input class="mono" type="text" name="timezone" value="Europe/Paris" maxlength="64"></label>
+  </div>
+  <fieldset class="chips" data-show-rec="weekly">
+    <legend>Jours</legend>
+    {% for v, l in days %}<label class="chip"><input type="checkbox" name="days" value="{{ v }}" {% if v in ('1', '2', '3', '4', '5') %}checked{% endif %}><span>{{ l }}</span></label>{% endfor %}
+  </fieldset>
+
+  <div class="stack" data-show-action="announcement">
+    <label class="field"><span>Message libre</span><textarea name="text" rows="2" maxlength="1000"></textarea></label>
+    <label class="field"><span>… ou message pré-enregistré</span>
+      <select name="preset_id"><option value="">— Aucun —</option>{% for p in presets %}<option value="{{ p.id }}">{{ p.title }}</option>{% endfor %}</select>
+    </label>
+    <div class="row">
+      <label class="field grow"><span>Voix</span>
+        <select name="voice"><option value="">Par défaut</option>{% for v in voices %}<option value="{{ v }}">{{ v }}</option>{% endfor %}</select>
+      </label>
+      <label class="field grow"><span>Langue</span>
+        <select name="lang"><option value="">Par défaut</option>{% for l in langs %}<option value="{{ l }}">{{ l }}</option>{% endfor %}</select>
+      </label>
+    </div>
+  </div>
+  <label class="field" data-show-action="scene" hidden><span>Scène</span>
+    <select name="scene_id" required>{% for s in scenes %}<option value="{{ s.id }}">{{ s.name }}</option>{% else %}<option value="">Aucune scène</option>{% endfor %}</select>
+  </label>
+  <label class="field" data-show-action="stop" hidden><span>Volume après pause (0-100, optionnel)</span><input type="number" name="stop_volume" min="0" max="100" inputmode="numeric"></label>
+
+  <div data-show-action="announcement stop">
+    <fieldset class="chips">
+      <legend>Groupes</legend>
+      {% for g in groups %}<label class="chip"><input type="checkbox" name="group_ids" value="{{ g.id }}"><span>{{ g.name }}</span></label>{% else %}<p class="muted">Aucun groupe.</p>{% endfor %}
+    </fieldset>
+    <fieldset class="chips">
+      <legend>Enceintes</legend>
+      {% for s in speakers %}<label class="chip"><input type="checkbox" name="speaker_ids" value="{{ s.id }}"><span>{{ s.name }}</span></label>{% else %}<p class="muted">Aucune enceinte.</p>{% endfor %}
+    </fieldset>
+  </div>
+
+  <div class="row">
+    <label class="field"><span>Jours fermés</span>
+      <select name="respect_closures"><option value="true">Ne pas exécuter</option><option value="false">Exécuter quand même</option></select>
+    </label>
+    <label class="field"><span>Mode test (préfixe vocal)</span>
+      <select name="is_test"><option value="false">Non</option><option value="true">Oui</option></select>
+    </label>
+    <button class="btn btn-filled" type="submit"><span class="icon">add</span>Créer</button>
+  </div>
+</form>
+
+<ul class="list">
+  {% for s in rows %}
+  <li>
+    <div class="row between">
+      <strong>{{ s.name }}</strong>
+      <span class="badge mono">{{ action_labels[s.action] }}{% if s.is_test %} · TEST{% endif %}</span>
+    </div>
+    <p class="small muted">
+      {% if s.once_date %}Le {{ s.once_date }}{% else %}{% for v, l in days if v | int in s.days %}{{ l }}{% if not loop.last %} {% endif %}{% endfor %}{% endif %}
+      à <span class="mono">{{ s.time_of_day }}</span> ({{ s.timezone }})
+      {% if not s.respect_closures %}· ignore les fermetures{% endif %}
+    </p>
+    <p class="small">Prochaine : <span class="mono">{{ s.next_run[:16] | replace('T', ' ') ~ ' UTC' if s.next_run else '—' }}</span>
+      {% if s.last_run_at %}· dernière : <span class="mono">{{ s.last_run_at[:16] | replace('T', ' ') }} UTC</span>{% endif %}</p>
+    <details>
+      <summary class="small" hx-get="/ui/planning/preview/{{ s.id }}" hx-target="next .preview" hx-trigger="click once">10 prochaines exécutions</summary>
+      <div class="preview"></div>
+    </details>
+    <div class="row">
+      <button class="btn {{ 'btn-tonal' if s.is_active else 'btn-text' }}" type="button" hx-patch="/schedules/{{ s.id }}" hx-vals='{"is_active": {{ 'false' if s.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#schedules"><span class="icon">{{ 'toggle_on' if s.is_active else 'toggle_off' }}</span>{{ 'Actif' if s.is_active else 'Inactif' }}</button>
+      <button class="btn btn-tonal" type="button" hx-post="/schedules/{{ s.id }}/run" hx-confirm="Exécuter « {{ s.name }} » maintenant ?" data-toast="Exécuté" hx-swap="none" data-refresh="#schedules"><span class="icon">play_arrow</span>Exécuter maintenant</button>
+      <button class="btn btn-icon btn-danger" type="button" hx-delete="/schedules/{{ s.id }}" hx-confirm="Supprimer la planification {{ s.name }} ?" hx-swap="none" data-refresh="#schedules" title="Supprimer"><span class="icon">delete</span></button>
+    </div>
+  </li>
+  {% else %}
+  <li class="muted">Aucune planification.</li>
+  {% endfor %}
+</ul>

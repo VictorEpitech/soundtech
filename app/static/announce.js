@@ -37,6 +37,7 @@
       voice: fd.get("voice") || null,
       lang: fd.get("lang") || null,
     };
+    if (form.elements.force_volume) o.force_volume = fd.get("force_volume") === "true";
     if (fd.get("preset_id")) o.preset_id = fd.get("preset_id");
     else o.text = fd.get("text") || "";
     return o;
@@ -71,7 +72,8 @@
     document.getElementById("pv-text").textContent = p.text;
     document.getElementById("pv-meta").textContent =
       "Voix : " + (p.voice || "par défaut") + " · Langue : " + (p.lang || "par défaut") +
-      " · Durée estimée : ~" + p.estimated_seconds + " s";
+      " · Durée estimée : ~" + p.estimated_seconds + " s" +
+      (p.volume ? " · Volume forcé : " + p.volume + " %" : "");
     var names = p.speakers.map(function (s) { return s.name; });
     var txt = p.speakers.length + " enceinte(s) : " + names.join(", ");
     if (p.ignored.length) txt += " — ignorée(s) car inactive(s) : " + p.ignored.map(function (s) { return s.name; }).join(", ");

@@ -1,0 +1,7 @@
+{% if data.next %}
+<ol class="small mono">
+  {% for n in data.next %}<li>{{ n.local }} <span class="muted">({{ data.timezone }})</span></li>{% endfor %}
+</ol>
+{% else %}
+<p class="muted small">Aucune échéance à venir (inactive, passée ou tous les jours fermés).</p>
+{% endif %}

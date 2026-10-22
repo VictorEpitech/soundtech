@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -328,3 +329,127 @@ class Scene(Base):
     speakers: Mapped[list[Speaker]] = relationship(
         secondary=scene_speakers, lazy="selectin", order_by=Speaker.name
     )
+
+
+class ScheduleAction(enum.StrEnum):
+    announcement = "announcement"
+    scene = "scene"
+    stop = "stop"
+
+
+class ScheduleRunStatus(enum.StrEnum):
+    running = "running"
+    ok = "ok"
+    skipped_closure = "skipped_closure"
+    skipped_alert = "skipped_alert"
+    failed = "failed"
+    missed = "missed"
+
+
+class ClosureKind(enum.StrEnum):
+    vacances = "vacances"
+    fermeture = "fermeture"
+    ferie = "ferie"
+
+
+class Schedule(Base):
+    """Planification : récurrence hebdo (jours ISO 1-7 + HH:MM) ou date unique, dans un fuseau."""
+
+    __tablename__ = "schedules"
+    __table_args__ = (
+        CheckConstraint("action IN ('announcement', 'scene', 'stop')", name="ck_schedules_action"),
+        CheckConstraint(
+            "stop_volume IS NULL OR (stop_volume >= 0 AND stop_volume <= 100)",
+            name="ck_schedules_stop_volume",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    timezone: Mapped[str] = mapped_column(
+        String(64), default="Europe/Paris", server_default="Europe/Paris"
+    )
+    days: Mapped[list[int]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
+    time_of_day: Mapped[str] = mapped_column(String(5))
+    once_date: Mapped[date | None] = mapped_column(Date)
+    action: Mapped[str] = mapped_column(String(16))
+    text: Mapped[str | None] = mapped_column(Text)
+    preset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("presets.id", ondelete="SET NULL")
+    )
+    voice: Mapped[str | None] = mapped_column(String(32))
+    lang: Mapped[str | None] = mapped_column(String(16))
+    group_ids: Mapped[list[str]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=list
+    )
+    speaker_ids: Mapped[list[str]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=list
+    )
+    scene_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("scenes.id", ondelete="SET NULL")
+    )
+    stop_volume: Mapped[int | None] = mapped_column(Integer)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    respect_closures: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_by_email: Mapped[str | None] = mapped_column(String(320))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    armed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ScheduleRun(Base):
+    """Journal d'exécution. `UNIQUE (schedule_id, scheduled_for)` : verrou d'idempotence."""
+
+    __tablename__ = "schedule_runs"
+    __table_args__ = (
+        UniqueConstraint("schedule_id", "scheduled_for", name="uq_schedule_runs_slot"),
+        CheckConstraint(
+            "status IN ('running', 'ok', 'skipped_closure', 'skipped_alert', 'failed', 'missed')",
+            name="ck_schedule_runs_status",
+        ),
+        CheckConstraint("trigger IN ('schedule', 'manual')", name="ck_schedule_runs_trigger"),
+        Index("ix_schedule_runs_scheduled_for", "scheduled_for"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    schedule_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("schedules.id", ondelete="CASCADE")
+    )
+    schedule_name: Mapped[str] = mapped_column(String(100), default="")
+    trigger: Mapped[str] = mapped_column(String(16), default="schedule", server_default="schedule")
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    detail: Mapped[str | None] = mapped_column(String(255))
+
+
+class Closure(Base):
+    """Plage de fermeture (dates incluses, calendrier local) saisie par l'admin."""
+
+    __tablename__ = "closures"
+    __table_args__ = (
+        CheckConstraint("end_date >= start_date", name="ck_closures_range"),
+        CheckConstraint("kind IN ('vacances', 'fermeture', 'ferie')", name="ck_closures_kind"),
+        Index("ix_closures_range", "start_date", "end_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    label: Mapped[str] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(16))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class PlanningSettings(Base):
+    """Ligne unique (id = 1) : interrupteur « tenir compte des jours fériés »."""
+
+    __tablename__ = "planning_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_planning_settings_single"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    observe_holidays: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")

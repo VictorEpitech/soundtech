@@ -97,17 +97,52 @@ class HAClient:
                 log.warning("HA %s failed (%s), retry %d", path, exc, attempt + 1)
                 await asyncio.sleep(self.backoff * 2**attempt)
 
-    async def _post(self, path: str, data: dict[str, Any]) -> None:
-        try:
-            r = await self._http.post(path, json=data)
-        except httpx.HTTPError as exc:
-            raise HAConnectionError(f"{type(exc).__name__}: {exc}") from exc
+    async def _check(self, r: httpx.Response) -> None:
         if r.status_code in (401, 403):
             raise HAAuthError(f"HA a refusé le token ({r.status_code})")
         if r.status_code >= 500:
             raise HAServerError(f"HA {r.status_code}")
         if r.status_code >= 400:
             raise HARequestError(f"HA {r.status_code}: {r.text[:200]}")
+
+    async def get_volume(self, entity_id: str) -> float | None:
+        """volume_level (0..1) de l'entité media_player ; None si l'attribut est absent."""
+        path = f"/api/states/{entity_id}"
+        for attempt in range(self.retries + 1):
+            try:
+                try:
+                    r = await self._http.get(path)
+                except httpx.HTTPError as exc:
+                    raise HAConnectionError(f"{type(exc).__name__}: {exc}") from exc
+                await self._check(r)
+                break
+            except _RETRYABLE as exc:
+                if attempt >= self.retries:
+                    raise
+                log.warning("HA GET %s failed (%s), retry %d", path, exc, attempt + 1)
+                await asyncio.sleep(self.backoff * 2**attempt)
+        try:
+            level = r.json().get("attributes", {}).get("volume_level")
+        except (ValueError, AttributeError) as exc:
+            raise HARequestError(f"réponse d'état illisible: {exc}") from exc
+        if isinstance(level, bool) or not isinstance(level, int | float):
+            return None
+        return min(1.0, max(0.0, float(level)))
+
+    async def set_volume(self, entity_id: str, level: float) -> None:
+        """media_player.volume_set ; level entre 0 et 1."""
+        await self.call_service(
+            "media_player",
+            "volume_set",
+            {"entity_id": entity_id, "volume_level": round(min(1.0, max(0.0, level)), 2)},
+        )
+
+    async def _post(self, path: str, data: dict[str, Any]) -> None:
+        try:
+            r = await self._http.post(path, json=data)
+        except httpx.HTTPError as exc:
+            raise HAConnectionError(f"{type(exc).__name__}: {exc}") from exc
+        await self._check(r)
 
     async def speak(
         self,

@@ -302,6 +302,7 @@ class AnnouncementIn(BaseModel):
     is_test: bool = False
     voice: str | None = Field(default=None, max_length=32)
     lang: str | None = Field(default=None, max_length=16)
+    force_volume: bool | None = None  # None = réglage de config ; False = ne pas forcer
 
     @model_validator(mode="after")
     def _one_source(self) -> "AnnouncementIn":
@@ -415,6 +416,7 @@ async def create_announcement(
         author=user,
         voice=voice,
         lang=lang,
+        force_volume=body.force_volume,
     )
     try:
         await service.submit(session, redis, ann, request=request)
@@ -428,7 +430,7 @@ async def preview_announcement(
     body: AnnouncementIn,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
-    _: User = Depends(staff_up),
+    user: User = Depends(staff_up),
 ) -> dict[str, Any]:
     """Aucun effet : ni écriture, ni audit, ni file."""
     voice, lang = await _voice_lang(session, settings, body)
@@ -462,6 +464,8 @@ async def preview_announcement(
         ],
         "ignored": [{"id": str(s.id), "name": s.name} for s in ignored],
         "estimated_seconds": seconds,
+        "volume": service.volume_level(settings, service.priority_for(user), body.force_volume)
+        or None,
         "warnings": warnings,
     }
 

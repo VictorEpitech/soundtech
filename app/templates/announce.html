@@ -4,7 +4,7 @@
 <h1>Annonces</h1>
 <section class="card">
   <h2>Nouvelle annonce</h2>
-  <form id="announce-form" class="stack" hx-post="/announcements" hx-ext="json-typed" data-json data-arrays="speaker_ids,group_ids" data-bools="is_test" data-toast="Annonce envoyée" data-reset data-refresh="#history" hx-confirm="Diffuser cette annonce ?" hx-swap="none">
+  <form id="announce-form" class="stack" hx-post="/announcements" hx-ext="json-typed" data-json data-arrays="speaker_ids,group_ids" data-bools="is_test,force_volume" data-toast="Annonce envoyée" data-reset data-refresh="#history" hx-confirm="Diffuser cette annonce ?" hx-swap="none">
     {% if presets %}
     <label class="field"><span>Message pré-enregistré</span>
       <select name="preset_id" id="preset-select">
@@ -48,6 +48,7 @@
       </label>
     </div>
     <label class="check"><input type="checkbox" name="is_test" value="true"><span>Ceci est un test</span></label>
+    {% if volume_level %}<label class="check"><input type="checkbox" name="force_volume" value="true" checked><span>Forcer le volume ({{ volume_level }} %)</span></label>{% endif %}
     <div class="row">
       <button class="btn btn-tonal" type="button" id="preview-btn" disabled><span class="icon">visibility</span>Prévisualiser</button>
       <button class="btn btn-filled" type="submit" id="send-btn" disabled><span class="icon">send</span>Envoyer</button>

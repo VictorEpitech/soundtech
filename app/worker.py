@@ -10,11 +10,12 @@ from app.alerts import responses
 from app.auth import audit
 from app.config import get_settings
 from app.db import SessionLocal
-from app.ha import service
+from app.ha import service, volume
 from app.ha.client import HAClient
 from app.logging import setup_logging
 from app.ma import monitor
 from app.ma.client import MAClient
+from app.planning import service as planning
 
 log = logging.getLogger("sound.worker")
 
@@ -39,6 +40,7 @@ async def startup(ctx: dict[str, Any]) -> None:
 
 
 async def shutdown(ctx: dict[str, Any]) -> None:
+    await volume.cancel_pending()  # restaure avant de fermer HA/Redis
     if ctx.get("ma_monitor") is not None:
         ctx["ma_monitor"].cancel()
         await asyncio.gather(ctx["ma_monitor"], return_exceptions=True)
@@ -51,6 +53,16 @@ async def drain_announcements(ctx: dict[str, Any]) -> int:
     if ctx["ha"] is None:
         return 0
     return await service.drain(SessionLocal, ctx["redis"], ctx["ha"], ctx["ma"])
+
+
+async def reap_volumes(ctx: dict[str, Any]) -> int:
+    """Filet de sécurité : baux de volume abandonnés, restaurations en échec à retenter."""
+    if ctx["ha"] is None:
+        return 0
+    outcomes = await volume.reap(ctx["redis"], ctx["ha"], get_settings())
+    for o in outcomes:
+        await volume.report(SessionLocal, o)
+    return len(outcomes)
 
 
 async def purge_responses(ctx: dict[str, Any]) -> int:
@@ -67,10 +79,19 @@ async def purge_responses(ctx: dict[str, Any]) -> int:
     return n
 
 
+async def run_schedules(ctx: dict[str, Any]) -> int:
+    n = await planning.tick(SessionLocal, ctx["redis"], get_settings(), ctx["ma"])
+    if n:
+        log.info("planification : %d échéance(s) traitée(s)", n)
+    return n
+
+
 class WorkerSettings:
     functions = [ping]
     cron_jobs = [
         cron(drain_announcements, second=set(range(60)), run_at_startup=True),
+        cron(reap_volumes, second={0, 15, 30, 45}, run_at_startup=True),
+        cron(run_schedules, second={5}, run_at_startup=True),
         cron(purge_responses, hour={3}, minute={15}),
     ]
     on_startup = startup

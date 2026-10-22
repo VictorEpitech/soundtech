@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Planification{% endblock %}
+{% block content %}
+<div class="row between">
+  <h1>Planification</h1>
+  <a class="btn btn-text" href="/admin"><span class="icon">arrow_back</span>Administration</a>
+</div>
+<p class="muted small">Le worker vérifie les échéances chaque minute. Une échéance manquée de plus de 5 minutes n'est pas rattrapée (journal : « missed »). Jamais pendant une alerte en cours.</p>
+
+<section class="card">
+  <h2>Planifications</h2>
+  <div id="schedules" hx-get="/ui/planning/schedules" hx-trigger="load, refresh"></div>
+</section>
+
+<section class="card">
+  <h2>Calendrier de fermeture</h2>
+  <div id="closures" hx-get="/ui/planning/closures" hx-trigger="load, refresh"></div>
+</section>
+
+<section class="card">
+  <h2>Journal d'exécution</h2>
+  <form id="run-filters" class="row" hx-get="/ui/planning/runs" hx-target="#runs" hx-trigger="change, submit">
+    <label class="field grow"><span>Planification</span>
+      <select name="schedule_id"><option value="">Toutes</option>{% for s in schedules %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select>
+    </label>
+    <label class="field"><span>Statut</span>
+      <select name="status"><option value="">Tous</option>{% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+    </label>
+  </form>
+  <div id="runs" hx-get="/ui/planning/runs" hx-trigger="load, refresh, htmx:afterSwap from:#schedules" hx-include="#run-filters"></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/planning.js" defer></script>{% endblock %}
