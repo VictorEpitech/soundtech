@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     alert_rate_window: int = 60
     alert_send_lease: int = 120
 
+    rl_window: int = 60
+    rl_auth_limit: int = 30
+    rl_refresh_limit: int = 30
+    rl_announce_limit: int = 20
+    rl_music_limit: int = 120
+    rl_webhook_limit: int = 3000
+
     teams_app_id: str = ""
     teams_app_secret: SecretStr = SecretStr("")
     teams_tenant_id: str = ""

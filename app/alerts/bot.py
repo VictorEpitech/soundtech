@@ -17,6 +17,7 @@ from app.auth.deps import get_session
 from app.config import Settings, get_settings
 from app.ha.router import get_redis
 from app.models import Incident, IncidentStatus
+from app.ratelimit import client_ip, hit
 
 log = logging.getLogger("sound.alerts.bot")
 
@@ -54,6 +55,9 @@ async def messages(
 ) -> JSONResponse:
     if not settings.teams_app_id:
         raise HTTPException(503, "teams bot not configured")
+    await hit(
+        request, f"rl:teams:ip:{client_ip(request)}", settings.rl_webhook_limit, settings.rl_window
+    )
     try:
         declared = int(request.headers.get("content-length") or 0)
     except ValueError:

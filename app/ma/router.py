@@ -7,8 +7,10 @@ from app.auth.deps import require_role
 from app.config import Settings, get_settings
 from app.ma.client import MAAuthError, MAClient, MAConnectionError, MAError
 from app.models import Role, User
+from app.ratelimit import per_user
 
 staff_up = require_role(Role.admin, Role.staff)
+music_user = per_user("music", "rl_music_limit", staff_up)
 
 router = APIRouter(prefix="/music", tags=["music"])
 
@@ -68,7 +70,7 @@ def _item_out(i: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/players")
 async def list_players(
-    _: User = Depends(staff_up), ma: MAClient = Depends(get_ma)
+    _: User = Depends(music_user), ma: MAClient = Depends(get_ma)
 ) -> list[dict[str, Any]]:
     return [_player_out(p) for p in await _run(ma.players())]
 
@@ -78,7 +80,7 @@ async def search(
     q: str = Query(min_length=1, max_length=200),
     media_types: list[MediaType] | None = Query(default=None),
     limit: int = Query(default=10, ge=1, le=50),
-    _: User = Depends(staff_up),
+    _: User = Depends(music_user),
     ma: MAClient = Depends(get_ma),
 ) -> dict[str, list[dict[str, Any]]]:
     res = await _run(ma.search(q.strip(), media_types, limit))
@@ -91,14 +93,14 @@ async def search(
 
 @router.post("/players/{player_id}/play", status_code=204)
 async def play(
-    player_id: str, body: PlayIn, _: User = Depends(staff_up), ma: MAClient = Depends(get_ma)
+    player_id: str, body: PlayIn, _: User = Depends(music_user), ma: MAClient = Depends(get_ma)
 ) -> None:
     await _run(ma.play_media(player_id, body.uri, body.option))
 
 
 def _cmd(name: str, cmd: str) -> None:
     async def endpoint(
-        player_id: str, _: User = Depends(staff_up), ma: MAClient = Depends(get_ma)
+        player_id: str, _: User = Depends(music_user), ma: MAClient = Depends(get_ma)
     ) -> None:
         await _run(ma.queue_cmd(player_id, cmd))
 
@@ -114,6 +116,6 @@ _cmd("resume", "play")
 
 @router.post("/players/{player_id}/volume", status_code=204)
 async def volume(
-    player_id: str, body: VolumeIn, _: User = Depends(staff_up), ma: MAClient = Depends(get_ma)
+    player_id: str, body: VolumeIn, _: User = Depends(music_user), ma: MAClient = Depends(get_ma)
 ) -> None:
     await _run(ma.volume_set(player_id, body.level))

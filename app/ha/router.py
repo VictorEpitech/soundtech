@@ -14,9 +14,11 @@ from app.auth.deps import get_session, require_role
 from app.config import Settings, get_settings
 from app.ha import service
 from app.models import Announcement, Preset, Role, Speaker, User
+from app.ratelimit import per_user
 
 admin_only = require_role(Role.admin)
 staff_up = require_role(Role.admin, Role.staff)
+announce_user = per_user("announce", "rl_announce_limit", staff_up)
 
 speakers_router = APIRouter(prefix="/speakers", tags=["speakers"])
 presets_router = APIRouter(prefix="/presets", tags=["presets"])
@@ -326,7 +328,7 @@ async def create_announcement(
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
     settings: Settings = Depends(get_settings),
-    user: User = Depends(staff_up),
+    user: User = Depends(announce_user),
 ) -> dict[str, Any]:
     if not settings.ha_configured:
         raise HTTPException(503, "home assistant not configured")

@@ -14,6 +14,7 @@ from app.auth import audit, oidc, tokens
 from app.auth.deps import ACCESS_COOKIE, REFRESH_COOKIE, current_user, get_session
 from app.config import Settings, get_settings
 from app.models import RefreshToken, Role, User
+from app.ratelimit import per_ip
 
 log = logging.getLogger("sound.auth")
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -56,7 +57,7 @@ async def _issue(session: AsyncSession, s: Settings, user: User) -> tuple[str, s
     return tokens.access_token(s, user.id, user.role), tokens.refresh_token(s, user.id, jti)
 
 
-@router.get("/login")
+@router.get("/login", dependencies=[Depends(per_ip("auth", "rl_auth_limit"))])
 async def login(settings: Settings = Depends(get_settings)) -> RedirectResponse:
     _check_config(settings)
     state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
@@ -67,7 +68,7 @@ async def login(settings: Settings = Depends(get_settings)) -> RedirectResponse:
     return resp
 
 
-@router.get("/callback")
+@router.get("/callback", dependencies=[Depends(per_ip("auth", "rl_auth_limit"))])
 async def callback(
     request: Request,
     code: str | None = None,
@@ -166,7 +167,7 @@ async def _valid_refresh(
     return rt, user
 
 
-@router.post("/refresh")
+@router.post("/refresh", dependencies=[Depends(per_ip("refresh", "rl_refresh_limit"))])
 async def refresh(
     request: Request,
     session: AsyncSession = Depends(get_session),

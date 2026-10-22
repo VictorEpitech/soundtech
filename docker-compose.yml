@@ -26,6 +26,12 @@ x-app: &app
     TEAMS_CONVERSATION_ID: ${TEAMS_CONVERSATION_ID:-}
     ROSTER_GROUP_ID: ${ROSTER_GROUP_ID:-}
     RESPONSE_RETENTION_DAYS: ${RESPONSE_RETENTION_DAYS:-90}
+    RL_WINDOW: ${RL_WINDOW:-60}
+    RL_AUTH_LIMIT: ${RL_AUTH_LIMIT:-30}
+    RL_REFRESH_LIMIT: ${RL_REFRESH_LIMIT:-30}
+    RL_ANNOUNCE_LIMIT: ${RL_ANNOUNCE_LIMIT:-20}
+    RL_MUSIC_LIMIT: ${RL_MUSIC_LIMIT:-120}
+    RL_WEBHOOK_LIMIT: ${RL_WEBHOOK_LIMIT:-3000}
 
 services:
   api:
@@ -96,6 +102,34 @@ services:
       timeout: 5s
       retries: 5
 
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    command:
+      - sh
+      - -c
+      - 'while true; do /scripts/backup.sh || echo "backup en echec" >&2; sleep "$${BACKUP_INTERVAL_SECONDS}"; done'
+    configs:
+      - source: backup_script
+        target: /scripts/backup.sh
+        mode: 0755
+      - source: restore_script
+        target: /scripts/restore.sh
+        mode: 0755
+    volumes:
+      - backups:/backups
+    networks: [internal]
+    depends_on:
+      db: {condition: service_healthy}
+
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -122,6 +156,10 @@ services:
 configs:
   caddyfile:
     file: ./Caddyfile
+  backup_script:
+    file: ./scripts/backup.sh
+  restore_script:
+    file: ./scripts/restore.sh
 
 networks:
   internal:
@@ -133,3 +171,4 @@ volumes:
   redis_data:
   caddy_data:
   caddy_config:
+  backups:

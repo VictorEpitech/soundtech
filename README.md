@@ -22,6 +22,10 @@ Pages Jinja2 + HTMX (`app/templates`, `app/static`, servies par l'API ; aucun bu
 Seul Caddy expose 80/443 (TLS automatique pour `DOMAIN`). Les migrations Alembic s'exécutent au démarrage de l'API.
 Sondes : `/healthz` (liveness), `/readyz` (Postgres + Redis).
 
+## Exploitation (phase 7)
+
+Service `backup` (postgres:16) : dump quotidien compressé dans le volume `backups`, rétention `BACKUP_RETENTION_DAYS` (défaut 14), intervalle `BACKUP_INTERVAL_SECONDS` (défaut 86400). Scripts `scripts/backup.sh` et `scripts/restore.sh` (restauration destructive, confirmation par saisie du nom de la base), montés dans le conteneur sous `/scripts`. Procédures (déploiement, rollback, restauration, pannes, rotation des secrets, test grandeur nature, purge RGPD) : `docs/runbook.md`.
+
 ## Home Assistant (annonces TTS)
 
 Variables : `HA_URL` (ex. `http://homeassistant:8123`), `HA_TOKEN` (long-lived token, secret, jamais dans le dépôt), `HA_TTS_SERVICE` (`domaine.service`, défaut `notify.alexa_media` ; pour un autre service TTS le payload est `entity_id` + `message`), `TEST_PREFIX` (préfixe vocal forcé quand `is_test`). Sans `HA_URL`/`HA_TOKEN` l'API démarre normalement : `POST /announcements` répond 503 et le worker ne consomme pas la file.

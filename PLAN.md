@@ -17,7 +17,7 @@
 4bis. **Lot interface (v1 utilisable)** ✅ — pages Jinja2/HTMX : login SSO, accueil/nav par rôle, Musique, Annonces, Admin (utilisateurs/rôles, enceintes `notify_service`/`ma_player_id`, messages). Aucune logique dupliquée : les pages appellent les routes JSON existantes. Page alertes ajoutée en phase 5.
 5. **Alertes sécurité** ✅ — création d'un `Incident` : TTS prioritaire + Adaptive Card Teams ; machine d'états (draft → envoyé → clos) ; double confirmation + mode test séparé.
 6. **Réponses étudiants & dashboard** ✅ — webhook Teams (Bot Framework / Action.Execute), table `Response`, listes répondants/non-répondants (diff avec roster Entra), SSE live, export CSV, relances ciblées des non-répondants.
-7. **Durcissement** — rate limit, tests de charge (pic de réponses), sauvegardes Postgres, runbook, test grandeur nature avec mode TEST.
+7. **Durcissement** — rate limit, tests de charge (pic de réponses), ~~sauvegardes Postgres, runbook~~ ✅ (service `backup`, `docs/runbook.md`), test grandeur nature avec mode TEST (à exécuter, checklist dans le runbook).
 8. **Déploiement prod** — compose sur serveur campus, Caddy/TLS, monitoring (Uptime Kuma), procédure de rollback.
 
 ## Livrables par phase
