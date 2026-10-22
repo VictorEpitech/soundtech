@@ -6,6 +6,8 @@ from arq import cron
 from arq.connections import RedisSettings
 from redis.asyncio import Redis
 
+from app.alerts import responses
+from app.auth import audit
 from app.config import get_settings
 from app.db import SessionLocal
 from app.ha import service
@@ -51,9 +53,26 @@ async def drain_announcements(ctx: dict[str, Any]) -> int:
     return await service.drain(SessionLocal, ctx["redis"], ctx["ha"], ctx["ma"])
 
 
+async def purge_responses(ctx: dict[str, Any]) -> int:
+    days = get_settings().response_retention_days
+    async with SessionLocal() as session:
+        n = await responses.purge(session, days)
+        if n:
+            audit.record(
+                session, "responses_purge", actor="worker", detail={"deleted": n, "days": days}
+            )
+        await session.commit()
+    if n:
+        log.info("purged %d responses older than %d days", n, days)
+    return n
+
+
 class WorkerSettings:
     functions = [ping]
-    cron_jobs = [cron(drain_announcements, second=set(range(60)), run_at_startup=True)]
+    cron_jobs = [
+        cron(drain_announcements, second=set(range(60)), run_at_startup=True),
+        cron(purge_responses, hour={3}, minute={15}),
+    ]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

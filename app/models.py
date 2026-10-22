@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -175,3 +176,35 @@ class Incident(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ResponseStatus(enum.StrEnum):
+    safe_campus = "safe_campus"
+    safe_offsite = "safe_offsite"
+    danger = "danger"
+
+
+class Response(Base):
+    """Réponse d'un étudiant à un incident (une seule par incident+utilisateur, mise à jour)."""
+
+    __tablename__ = "responses"
+    __table_args__ = (
+        UniqueConstraint("incident_id", "user_aad_id", name="uq_responses_incident_user"),
+        CheckConstraint(
+            "status IN ('safe_campus', 'safe_offsite', 'danger')", name="ck_responses_status"
+        ),
+        Index("ix_responses_received_at", "received_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE")
+    )
+    user_aad_id: Mapped[str] = mapped_column(String(64))
+    user_email: Mapped[str | None] = mapped_column(String(320))
+    user_name: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    status: Mapped[str] = mapped_column(String(16))
+    text: Mapped[str | None] = mapped_column(Text)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

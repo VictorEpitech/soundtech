@@ -4,13 +4,15 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.alerts import service
-from app.alerts.teams import TeamsNotifier, get_notifier
+from app.alerts import responses, service
+from app.alerts.roster import RosterProvider, get_roster_provider
+from app.alerts.teams import IncidentNotice, TeamsError, TeamsNotifier, get_notifier
 from app.auth import audit
 from app.auth.deps import get_session, require_role
 from app.config import Settings, get_settings
@@ -26,6 +28,10 @@ router = APIRouter(prefix="/incidents", tags=["incidents"])
 
 def get_teams_notifier(settings: Settings = Depends(get_settings)) -> TeamsNotifier:
     return get_notifier(settings)
+
+
+def get_roster(settings: Settings = Depends(get_settings)) -> RosterProvider:
+    return get_roster_provider(settings)
 
 
 class IncidentIn(BaseModel):
@@ -196,3 +202,127 @@ async def close_incident(
         return _out(await service.close(session, incident_id, user, request))
     except service.AlertError as e:
         raise HTTPException(e.status, e.detail) from None
+
+
+@router.get("/{incident_id}/responses")
+async def incident_responses(
+    incident_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    roster: RosterProvider = Depends(get_roster),
+    _: User = Depends(staff_up),
+) -> dict[str, Any]:
+    await _get(session, incident_id)
+    data, _missing = await responses.report(session, roster, incident_id)
+    return data
+
+
+@router.get("/{incident_id}/export.csv")
+async def export_csv(
+    incident_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    roster: RosterProvider = Depends(get_roster),
+    user: User = Depends(staff_up),
+) -> Response:
+    await _get(session, incident_id)
+    data, _missing = await responses.report(session, roster, incident_id)
+    if data["roster"]["error"]:
+        raise HTTPException(502, "roster unavailable")
+    audit.record(
+        session,
+        "incident_export",
+        request=request,
+        user_id=user.id,
+        actor=user.email,
+        detail={"incident_id": str(incident_id), "rows": len(data["respondents"])},
+    )
+    return Response(
+        responses.to_csv(data),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="incident-{incident_id}.csv"'},
+    )
+
+
+@router.post("/{incident_id}/remind")
+async def remind(
+    incident_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+    settings: Settings = Depends(get_settings),
+    notifier: TeamsNotifier = Depends(get_teams_notifier),
+    roster: RosterProvider = Depends(get_roster),
+    user: User = Depends(staff_up),
+) -> dict[str, Any]:
+    await _rate_limit(redis, settings, user, "remind")
+    incident = await _get(session, incident_id)
+    if incident.status != "sent":
+        raise HTTPException(409, "incident is not sent")
+    if not roster.configured:
+        raise HTTPException(409, "roster not configured (ROSTER_GROUP_ID)")
+    data, missing = await responses.report(session, roster, incident_id)
+    if data["roster"]["error"]:
+        raise HTTPException(502, "roster unavailable")
+    if not missing:
+        return {"reminded": 0}
+    key = f"remind:cooldown:{incident_id}"
+    try:
+        fresh = settings.remind_cooldown <= 0 or await redis.set(
+            key, "1", nx=True, ex=settings.remind_cooldown
+        )
+    except Exception:
+        log.warning("remind cooldown unavailable", exc_info=True)
+        fresh = True
+    if not fresh:
+        raise HTTPException(429, "reminder already sent recently")
+    notice = IncidentNotice(str(incident.id), incident.title, incident.message, incident.is_test)
+    try:
+        detail = await notifier.remind(notice, missing)
+    except TeamsError as e:
+        try:
+            await redis.delete(key)
+        except Exception:
+            log.warning("remind cooldown reset failed", exc_info=True)
+        audit.record(
+            session,
+            "incident_remind_failed",
+            request=request,
+            user_id=user.id,
+            actor=user.email,
+            detail={"incident_id": str(incident_id), "error": str(e)},
+        )
+        await session.commit()
+        raise HTTPException(502, "reminder delivery failed") from None
+    audit.record(
+        session,
+        "incident_remind",
+        request=request,
+        user_id=user.id,
+        actor=user.email,
+        detail={"incident_id": str(incident_id), "targets": len(missing)},
+    )
+    return {**detail, "reminded": detail.get("mentioned", len(missing))}
+
+
+@router.get("/{incident_id}/stream")
+async def stream(
+    incident_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+    user: User = Depends(staff_up),
+) -> StreamingResponse:
+    await _get(session, incident_id)
+    await session.close()  # ne pas garder une connexion DB pendant toute la durée du flux
+    if not await responses.acquire_stream_slot(redis, user.id):
+        raise HTTPException(429, "too many concurrent streams")
+    return StreamingResponse(
+        responses.event_stream(
+            redis,
+            incident_id,
+            request.is_disconnected,
+            on_close=lambda: responses.release_stream_slot(redis, user.id),
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

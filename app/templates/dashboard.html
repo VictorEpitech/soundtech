@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Réponses · {{ incident.title }}{% endblock %}
+{% block content %}
+<p><a class="btn btn-text" href="/alerts"><span class="icon">arrow_back</span>Alertes</a></p>
+<h1>{{ incident.title }}</h1>
+{% if incident.is_test %}<p class="banner-test"><span class="icon">science</span>TEST</p>{% endif %}
+<p class="muted"><span class="badge mono incident-{{ incident.status }}">{{ incident.status }}</span> {{ incident.message }}</p>
+<section class="card">
+  <div class="row between">
+    <h2>Réponses</h2>
+    <div class="row">
+      <a class="btn btn-tonal" href="/incidents/{{ incident.id }}/export.csv"><span class="icon">download</span>Export CSV</a>
+      {% if incident.status == 'sent' %}
+      <button class="btn btn-filled" type="button" hx-post="/incidents/{{ incident.id }}/remind" hx-confirm="Relancer les non-répondants sur Teams ?" hx-swap="none" data-toast="Relance envoyée" data-refresh="#responses"><span class="icon">notifications_active</span>Relancer les non-répondants</button>
+      {% endif %}
+    </div>
+  </div>
+  <div id="responses" hx-get="/ui/alerts/{{ incident.id }}/responses" hx-trigger="load, refresh" data-sse="/incidents/{{ incident.id }}/stream"></div>
+</section>
+{% endblock %}

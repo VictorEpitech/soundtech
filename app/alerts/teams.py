@@ -1,18 +1,20 @@
 """Diffusion Teams : protocole `TeamsNotifier` + implémentations log (défaut) et Bot/Graph."""
 
+import html
 import logging
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 import httpx
 
+from app.alerts.roster import Member
 from app.config import Settings
 
 log = logging.getLogger("sound.alerts.teams")
 
 RESPONSE_CHOICES: list[tuple[str, str]] = [
     ("safe_campus", "En sécurité, sur le campus"),
-    ("safe_offcampus", "En sécurité, hors campus"),
+    ("safe_offsite", "En sécurité, hors campus"),
     ("danger", "En danger / Besoin d'aide"),
 ]
 RESPONSE_VERB = "incident_response"
@@ -80,6 +82,10 @@ class TeamsNotifier(Protocol):
         """Diffuse la carte. Renvoie un dict de détails ; lève `TeamsError` en cas d'échec."""
         ...
 
+    async def remind(self, notice: IncidentNotice, targets: list[Member]) -> dict[str, Any]:
+        """Relance les `targets` (carte « RAPPEL » + mentions). Lève `TeamsError` en cas d'échec."""
+        ...
+
 
 class LogTeamsNotifier:
     """Défaut sans configuration : journalise seulement."""
@@ -88,14 +94,23 @@ class LogTeamsNotifier:
         log.warning("teams not configured: incident %s not broadcast", notice.incident_id)
         return {"skipped": "teams not configured"}
 
+    async def remind(self, notice: IncidentNotice, targets: list[Member]) -> dict[str, Any]:
+        log.warning(
+            "teams not configured: reminder for incident %s not sent (%d targets)",
+            notice.incident_id,
+            len(targets),
+        )
+        return {"skipped": "teams not configured", "targets": len(targets)}
+
 
 class GraphTeamsNotifier:
     """Poste la carte dans une conversation Teams via le Bot Framework Connector.
 
-    Réception des réponses (webhook Action.Execute) : phase 6.
+    Réception des réponses : `app/alerts/bot.py` (webhook Action.Execute).
     """
 
     TOKEN_SCOPE = "https://api.botframework.com/.default"
+    MAX_MENTIONS = 20
 
     def __init__(
         self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None
@@ -117,15 +132,8 @@ class GraphTeamsNotifier:
         r.raise_for_status()
         return str(r.json()["access_token"])
 
-    async def notify(self, notice: IncidentNotice) -> dict[str, Any]:
+    async def _post(self, activity: dict[str, Any]) -> dict[str, Any]:
         s = self._s
-        card = build_card(notice, s.test_prefix.rstrip(". ").upper() or "TEST")
-        activity = {
-            "type": "message",
-            "attachments": [
-                {"contentType": "application/vnd.microsoft.card.adaptive", "content": card}
-            ],
-        }
         base = s.teams_service_url.rstrip("/")
         url = f"{base}/v3/conversations/{s.teams_conversation_id}/activities"
         try:
@@ -138,6 +146,46 @@ class GraphTeamsNotifier:
             raise TeamsError(f"teams http {exc.response.status_code}") from None
         except (httpx.HTTPError, KeyError, ValueError) as exc:
             raise TeamsError(f"teams error: {type(exc).__name__}") from None
+
+    def _card_activity(
+        self, notice: IncidentNotice, prefix: str = "", text: str = "", entities: list | None = None
+    ) -> dict[str, Any]:
+        tag = self._s.test_prefix.rstrip(". ").upper() or "TEST"
+        card = build_card(notice, tag)
+        if prefix:
+            card["body"][0]["text"] = f"{prefix} {card['body'][0]['text']}"
+        activity: dict[str, Any] = {
+            "type": "message",
+            "attachments": [
+                {"contentType": "application/vnd.microsoft.card.adaptive", "content": card}
+            ],
+        }
+        if text:
+            activity["text"] = text
+            activity["entities"] = entities or []
+        return activity
+
+    async def notify(self, notice: IncidentNotice) -> dict[str, Any]:
+        return await self._post(self._card_activity(notice))
+
+    async def remind(self, notice: IncidentNotice, targets: list[Member]) -> dict[str, Any]:
+        """Rappel par lots de `MAX_MENTIONS` mentions : tous les `targets` sont mentionnés."""
+        out: dict[str, Any] = {}
+        mentioned = 0
+        for i in range(0, len(targets), self.MAX_MENTIONS):
+            batch = targets[i : i + self.MAX_MENTIONS]
+            entities = [
+                {
+                    "type": "mention",
+                    "text": f"<at>{html.escape(m.name or m.aad_id)}</at>",
+                    "mentioned": {"id": m.aad_id, "name": m.name or m.aad_id},
+                }
+                for m in batch
+            ]
+            text = " ".join(e["text"] for e in entities)
+            out = await self._post(self._card_activity(notice, "RAPPEL :", text, entities))
+            mentioned += len(batch)
+        return {**out, "targets": len(targets), "mentioned": mentioned}
 
 
 def get_notifier(settings: Settings) -> TeamsNotifier:

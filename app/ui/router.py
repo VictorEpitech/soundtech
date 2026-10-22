@@ -1,3 +1,4 @@
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -8,7 +9,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import admin as users_api
+from app.alerts import responses as responses_svc
 from app.alerts import router as alerts_api
+from app.alerts.roster import RosterProvider
 from app.auth.deps import get_session
 from app.config import Settings, get_settings
 from app.ha import router as ha_api
@@ -92,6 +95,20 @@ async def announce_page(
 @router.get("/alerts")
 async def alerts_page(request: Request, user: User = Depends(staff_page)) -> Response:
     return render(request, "alerts.html", user, active="alerts")
+
+
+@router.get("/alerts/{incident_id}")
+async def alert_dashboard(
+    request: Request,
+    incident_id: uuid.UUID,
+    user: User = Depends(staff_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    try:
+        incident = await alerts_api.get_incident(incident_id, session, user)
+    except HTTPException:
+        raise PageError(404, "Incident introuvable") from None
+    return render(request, "dashboard.html", user, active="alerts", incident=incident)
 
 
 @router.get("/admin")
@@ -194,3 +211,19 @@ async def incidents_fragment(
         alert_word=settings.alert_confirm_text,
         test_word=settings.alert_test_confirm_text,
     )
+
+
+@router.get("/ui/alerts/{incident_id}/responses")
+async def responses_fragment(
+    request: Request,
+    incident_id: uuid.UUID,
+    user: User = Depends(staff_page),
+    session: AsyncSession = Depends(get_session),
+    roster: RosterProvider = Depends(alerts_api.get_roster),
+) -> Response:
+    try:
+        await alerts_api.get_incident(incident_id, session, user)
+    except HTTPException as e:
+        return _fragment_error(request, e)
+    data, _ = await responses_svc.report(session, roster, incident_id)
+    return render(request, "partials/responses.html", user, data=data, incident_id=incident_id)

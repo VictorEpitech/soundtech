@@ -286,3 +286,8 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 .incident-closed { color: var(--ok); }
 .btn-danger { background: var(--error); color: var(--bg); }
 .incident-failed { color: var(--error); }
+
+/* Dashboard des réponses */
+.counters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+.resp-danger { border-left: 4px solid var(--error); padding-left: 12px; }

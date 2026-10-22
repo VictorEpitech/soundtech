@@ -241,7 +241,7 @@ NOTICE = IncidentNotice("id-1", "Titre", "Message", False)
 def test_card_has_three_answers_and_optional_text() -> None:
     card = teams.build_card(NOTICE)
     choice = next(b for b in card["body"] if b["type"] == "Input.ChoiceSet")
-    assert [c["value"] for c in choice["choices"]] == ["safe_campus", "safe_offcampus", "danger"]
+    assert [c["value"] for c in choice["choices"]] == ["safe_campus", "safe_offsite", "danger"]
     text = next(b for b in card["body"] if b["type"] == "Input.Text")
     assert not text.get("isRequired")
     assert card["actions"][0]["data"]["incident_id"] == "id-1"

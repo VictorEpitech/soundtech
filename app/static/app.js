@@ -103,6 +103,22 @@
     if (!busy) htmx.trigger(list, "refresh");
   }, 5000);
 
+  // Flux SSE : chaque évènement déclenche un rafraîchissement HTMX du fragment (auth/401 gérés par htmx).
+  function openStream(el) {
+    var es = new EventSource(el.dataset.sse, { withCredentials: true });
+    es.addEventListener("update", function () { htmx.trigger(el, "refresh"); });
+    es.onerror = function () {
+      if (es.readyState !== EventSource.CLOSED) return;
+      renewSession().then(function (ok) {
+        if (ok && document.body.contains(el)) setTimeout(function () { openStream(el); }, 2000);
+      });
+    };
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    var el = document.querySelector("[data-sse]");
+    if (el) openStream(el);
+  });
+
   document.body.addEventListener("htmx:sendError", function () {
     toast("Serveur injoignable", true);
   });

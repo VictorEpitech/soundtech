@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     teams_conversation_id: str = ""
     teams_timeout: float = 10.0
 
+    roster_group_id: str = ""
+    roster_timeout: float = 15.0
+    roster_cache_ttl: int = 120
+    response_retention_days: int = 90
+    remind_cooldown: int = 300
+
     @field_validator("ha_tts_service")
     @classmethod
     def _service_format(cls, v: str) -> str:

@@ -1,0 +1,43 @@
+{% set c = data.counts %}
+<div class="counters">
+  <span class="badge mono status-done">En sécurité (campus) : {{ c.safe_campus }}</span>
+  <span class="badge mono status-done">En sécurité (hors campus) : {{ c.safe_offsite }}</span>
+  <span class="badge mono status-failed">En danger : {{ c.danger }}</span>
+  <span class="badge mono">Répondants : {{ c.responded }}</span>
+  {% if data.roster.configured %}<span class="badge mono">Sans réponse : {{ c.not_responded }} / {{ c.roster_total }}</span>{% endif %}
+</div>
+{% if not data.roster.configured %}
+<p class="muted small">Roster non configuré (ROSTER_GROUP_ID) : les non-répondants ne sont pas calculés.</p>
+{% elif data.roster.error %}
+<p class="status-failed small">Roster indisponible ({{ data.roster.error }}).</p>
+{% endif %}
+<div class="cols">
+  <div>
+    <h3>Répondants</h3>
+    {% if not data.respondents %}<p class="muted">Aucune réponse pour l'instant.</p>{% else %}
+    <ul class="list">
+      {% for r in data.respondents %}
+      <li class="resp resp-{{ r.status }}">
+        <div class="row between">
+          <strong>{{ r.name or r.email or r.aad_id }}</strong>
+          <span class="badge mono {{ 'status-failed' if r.status == 'danger' else 'status-done' }}">{{ r.status }}</span>
+        </div>
+        {% if r.email %}<p class="muted small">{{ r.email }}</p>{% endif %}
+        {% if r.text %}<p>{{ r.text }}</p>{% endif %}
+        <p class="muted small mono">{{ r.received_at[:19] | replace('T', ' ') if r.received_at else '' }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  <div>
+    <h3>Sans réponse</h3>
+    {% if not data.non_respondents %}<p class="muted">{{ 'Tout le monde a répondu.' if data.roster.configured and not data.roster.error else '—' }}</p>{% else %}
+    <ul class="list">
+      {% for m in data.non_respondents %}
+      <li><strong>{{ m.name or m.email or m.aad_id }}</strong>{% if m.email %} <span class="muted small">{{ m.email }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>

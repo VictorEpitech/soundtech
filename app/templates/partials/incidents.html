@@ -18,6 +18,9 @@
       · Teams : {% if i.delivery.teams.ok %}<span class="status-done">{{ 'ignoré' if i.delivery.teams.skipped else 'ok' }}</span>{% else %}<span class="status-failed">échec ({{ i.delivery.teams.error }})</span>{% endif %}
     </p>
     {% endif %}
+    {% if i.status in ('sent', 'closed') %}
+    <a class="btn btn-text" href="/alerts/{{ i.id }}"><span class="icon">monitoring</span>Réponses</a>
+    {% endif %}
     {% if i.status in ('draft', 'failed') %}
     {% set word = test_word if i.is_test else alert_word %}
     <form class="row" hx-post="/incidents/{{ i.id }}/send" hx-ext="json-typed" data-json data-toast="Alerte envoyée" data-refresh="#incidents" hx-swap="none">
