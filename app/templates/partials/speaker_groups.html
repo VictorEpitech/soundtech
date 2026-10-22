@@ -1,0 +1,44 @@
+<form class="stack" hx-post="/speaker-groups" hx-ext="json-typed" data-json data-arrays="member_ids" data-toast="Groupe créé" data-reset data-refresh="#speaker-groups" hx-swap="none">
+  <div class="row">
+    <label class="field grow"><span>Nom</span><input type="text" name="name" required maxlength="100"></label>
+    <label class="field grow"><span>Description</span><input type="text" name="description" maxlength="500"></label>
+  </div>
+  <fieldset class="chips">
+    <legend>Membres</legend>
+    {% for s in speakers %}
+    <label class="chip"><input type="checkbox" name="member_ids" value="{{ s.id }}"><span>{{ s.name }}{% if not s.is_active %} (inactive){% endif %}</span></label>
+    {% else %}
+    <p class="muted">Aucune enceinte déclarée.</p>
+    {% endfor %}
+  </fieldset>
+  <button class="btn btn-filled" type="submit"><span class="icon">add</span>Créer le groupe</button>
+</form>
+<ul class="list">
+  {% for g in rows %}
+  <li>
+    <form class="stack" hx-patch="/speaker-groups/{{ g.id }}" hx-ext="json-typed" data-json data-arrays="member_ids" hx-swap="none" data-refresh="#speaker-groups" data-toast="Groupe enregistré">
+      <div class="row between">
+        <strong>{{ g.name }}</strong>
+        <span class="badge mono">{{ g.active_count }}/{{ g.members|length }} active{{ 's' if g.active_count > 1 else '' }}</span>
+      </div>
+      <div class="row">
+        <label class="field grow"><span>Nom</span><input type="text" name="name" value="{{ g.name }}" required maxlength="100"></label>
+        <label class="field grow"><span>Description</span><input type="text" name="description" value="{{ g.description or '' }}" maxlength="500"></label>
+      </div>
+      <fieldset class="chips">
+        <legend>Membres</legend>
+        {% for s in speakers %}
+        <label class="chip"><input type="checkbox" name="member_ids" value="{{ s.id }}" {% if s.id in g.member_ids %}checked{% endif %}><span>{{ s.name }}{% if not s.is_active %} (inactive){% endif %}</span></label>
+        {% endfor %}
+      </fieldset>
+      <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+    </form>
+    <div class="row">
+      <button class="btn {{ 'btn-tonal' if g.is_active else 'btn-text' }}" type="button" hx-patch="/speaker-groups/{{ g.id }}" hx-vals='{"is_active": {{ 'false' if g.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#speaker-groups"><span class="icon">{{ 'toggle_on' if g.is_active else 'toggle_off' }}</span>{{ 'Actif' if g.is_active else 'Inactif' }}</button>
+      <button class="btn btn-icon btn-danger" type="button" hx-delete="/speaker-groups/{{ g.id }}" hx-confirm="Supprimer le groupe {{ g.name }} ?" hx-swap="none" data-refresh="#speaker-groups" title="Supprimer"><span class="icon">delete</span></button>
+    </div>
+  </li>
+  {% else %}
+  <li class="muted">Aucun groupe d'enceintes. Créez-en un pour cibler plusieurs enceintes en un clic.</li>
+  {% endfor %}
+</ul>

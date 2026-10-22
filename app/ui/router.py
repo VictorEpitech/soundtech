@@ -10,6 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import admin as users_api
+from app import groups as groups_api
+from app import scenes as scenes_api
 from app.alerts import responses as responses_svc
 from app.alerts import router as alerts_api
 from app.alerts import templates_api as alert_templates_api
@@ -33,6 +35,7 @@ SEARCH_GROUPS = (
     ("artists", "Artistes"),
     ("playlists", "Playlists"),
 )
+MEDIA_TYPES = (("playlist", "Playlist"), ("album", "Album"), ("track", "Piste"), ("radio", "Radio"))
 ROLE_LABELS = {"admin": "Administrateur", "staff": "Personnel", "student": "Étudiant"}
 
 
@@ -57,6 +60,10 @@ def register(app: FastAPI) -> None:
         resp = render(request, "error.html", status=exc.status, message=exc.message)
         resp.status_code = exc.status
         return resp
+
+
+def _group_rows(rows: list[Any]) -> list[dict[str, Any]]:
+    return [groups_api.out(g) for g in rows]
 
 
 def _fragment_error(request: Request, exc: HTTPException) -> HTMLResponse:
@@ -86,6 +93,8 @@ async def music_page(
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     ctx = await _players(settings, user, session)
+    ctx["scenes"] = await scenes_api.list_scenes(session, active_only=True)
+    ctx["groups"] = _group_rows(await groups_api.list_groups(session, active_only=True))
     return render(request, "music.html", user, active="music", **ctx)
 
 
@@ -97,8 +106,15 @@ async def announce_page(
 ) -> Response:
     speakers = [s for s in await ha_api.list_speakers(session, user) if s["is_active"]]
     presets = [p for p in await ha_api.list_presets(session, user) if p["is_active"]]
+    grp = _group_rows(await groups_api.list_groups(session, active_only=True))
     return render(
-        request, "announce.html", user, active="announce", speakers=speakers, presets=presets
+        request,
+        "announce.html",
+        user,
+        active="announce",
+        speakers=speakers,
+        presets=presets,
+        groups=grp,
     )
 
 
@@ -263,6 +279,39 @@ async def alert_templates_fragment(
 ) -> Response:
     rows = [alert_templates_api.out(t) for t in await alert_templates_api.list_templates(session)]
     return render(request, "partials/alert_templates.html", user, rows=rows)
+
+
+@router.get("/ui/admin/speaker-groups")
+async def speaker_groups_fragment(
+    request: Request,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    rows = _group_rows(await groups_api.list_groups(session))
+    speakers = await ha_api.list_speakers(session, user)
+    return render(request, "partials/speaker_groups.html", user, rows=rows, speakers=speakers)
+
+
+@router.get("/ui/admin/scenes")
+async def scenes_fragment(
+    request: Request,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    rows = await scenes_api.list_scenes(session)
+    speakers = await ha_api.list_speakers(session, user)
+    grp = _group_rows(await groups_api.list_groups(session))
+    presets = [p for p in await ha_api.list_presets(session, user) if p["is_active"]]
+    return render(
+        request,
+        "partials/scenes.html",
+        user,
+        rows=rows,
+        speakers=speakers,
+        groups=grp,
+        presets=presets,
+        media_types=MEDIA_TYPES,
+    )
 
 
 HISTORY_SIZE = 25

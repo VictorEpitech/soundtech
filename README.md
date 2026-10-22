@@ -36,6 +36,12 @@ Variables : `MA_URL` (ex. `http://music-assistant:8095`), `MA_TOKEN` (token long
 
 API : `/speakers` et `/presets` (CRUD admin, lecture staff), `POST /announcements` (admin/staff ; `text` ou `preset_id`, `speaker_ids`, `is_test`), `GET /announcements[/{id}]`. Priorité déduite du rôle (admin=1, staff=2 ; `alert`=0 réservé aux alertes internes, phase 5). File Redis (sorted set) consommée par le worker arq (un seul consommateur sous verrou, FIFO par niveau).
 
+## Groupes d'enceintes & scènes (phase 9)
+
+Groupes : `/speaker-groups` (CRUD admin, lecture staff ; `GET /speaker-groups/{id}/resolve`). Un groupe est résolu côté serveur à chaque usage en enceintes ACTIVES (enceinte désactivée ignorée ; groupe inactif ou sans membre actif : 409 explicite). `POST /announcements` accepte `speaker_ids` et/ou `group_ids` (union dédoublonnée). Page Musique : boutons « groupe » qui cochent les lecteurs (seules les enceintes avec `ma_player_id` comptent ; `declared_player` reste la garde serveur).
+
+Scènes : `/scenes` (CRUD admin, lecture staff), `POST /scenes/{id}/launch` (staff + admin, limite musique `RL_MUSIC_LIMIT`). Cibles : groupe et/ou enceintes ; média MA (URI, type playlist/album/track/radio, mode play/replace) ; volume, shuffle, repeat optionnels ; annonce optionnelle (message pré-enregistré, jamais en mode TEST) envoyée avant la lecture dans la file existante, avec attente bornée `SCENE_ANNOUNCE_WAIT` (20 s, sinon la lecture démarre et l'annonce passe par le ducking habituel). Lancement : volume puis lecture sur chaque player résolu (un player partagé n'est piloté qu'une fois) ; résultat partiel renvoyé dans `failed` (toast), 502 si aucun player n'a démarré. Refusé (409) tant qu'un incident d'alerte est `sent` : la file/ducking ne protège que les annonces, pas une musique lancée après coup. Audit `scene_launch` (scène, auteur, enceintes, players, compteurs ; jamais de texte d'annonce). Interface : Admin → « Groupes d'enceintes » et « Scènes », grille de scènes en haut de `/music`. Non testé contre un vrai Music Assistant (commandes `player_queues/shuffle` et `repeat`).
+
 ## Alertes de sécurité (phase 5)
 
 Routes staff+admin : `POST /incidents` (brouillon : `type`, `title`, `message`, `is_test`), `GET /incidents[/{id}]`, `POST /incidents/{id}/send` (corps `{"confirm": "..."}`), `POST /incidents/{id}/close`. Machine d'états `draft -> sent -> closed` (transition atomique, 409 sinon), chaque transition écrit `audit_log` (`incident_create/send/delivery/close`, `incident_send_refused`).

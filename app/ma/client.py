@@ -142,6 +142,14 @@ class MAClient:
             raise ValueError(cmd)
         await self.call(f"player_queues/{cmd}", queue_id=queue_id)
 
+    async def queue_shuffle(self, queue_id: str, enabled: bool) -> None:
+        await self.call("player_queues/shuffle", queue_id=queue_id, shuffle_enabled=enabled)
+
+    async def queue_repeat(self, queue_id: str, mode: str) -> None:
+        if mode not in ("off", "one", "all"):
+            raise ValueError(mode)
+        await self.call("player_queues/repeat", queue_id=queue_id, repeat_mode=mode)
+
     async def queue(self, queue_id: str, limit: int = 100) -> dict[str, Any]:
         """État de la file (`current_index`) et ses éléments, sur une seule session."""
         async with self.session() as conn:

@@ -15,6 +15,7 @@
       var bools = split(holder.dataset.bools);
       var ints = split(holder.dataset.ints);
       var out = {};
+      arrays.forEach(function (k) { if (!(k in params)) out[k] = []; });
       Object.keys(params).forEach(function (k) {
         var v = params[k];
         if (arrays.indexOf(k) >= 0) v = Array.isArray(v) ? v : [v];

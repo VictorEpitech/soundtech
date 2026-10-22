@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     ma_url: str = ""
     ma_token: SecretStr = SecretStr("")
     ma_timeout: float = 10.0
+    scene_announce_wait: float = 20.0
 
     alert_confirm_text: str = "ALERTE"
     alert_test_confirm_text: str = "TEST"

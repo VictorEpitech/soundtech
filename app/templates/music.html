@@ -3,7 +3,29 @@
 {% block content %}
 <h1>Musique</h1>
 <section class="card">
+  <h2>Scènes</h2>
+  {% if scenes %}
+  <div class="scene-grid" id="scenes">
+    {% for sc in scenes %}
+    <button class="scene-btn" type="button" data-scene="{{ sc.id }}"{% if sc.color %} style="--tone: {{ sc.color }}"{% endif %}>
+      <span class="icon">{{ sc.icon or 'queue_music' }}</span>{{ sc.name }}
+    </button>
+    {% endfor %}
+  </div>
+  <p class="muted small">Un clic lance la scène (volume puis lecture). Bloqué pendant un incident d'alerte.</p>
+  {% else %}
+  <p class="muted">Aucune scène.{% if user and user.role == 'admin' %} Créez-en dans <a href="/admin">Admin → Scènes</a>.{% endif %}</p>
+  {% endif %}
+</section>
+<section class="card">
   <h2>Lecteurs</h2>
+  {% if groups %}
+  <div class="chips" id="group-picks">
+    {% for g in groups %}
+    <button class="btn btn-tonal" type="button" data-pick-group="{{ g.id }}" title="Sélectionner le groupe {{ g.name }}"><span class="icon">speaker_group</span>{{ g.name }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
   <div id="group-bar" class="player-ctl group-bar" hidden>
     <span class="badge mono" id="sel-count">0</span>
     <button class="btn btn-icon" type="button" data-group="previous" title="Précédent (sélection)"><span class="icon">skip_previous</span></button>

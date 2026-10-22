@@ -53,6 +53,70 @@
     setTimeout(function () { window.SoundUI.refresh("#queue"); }, 1200);
   });
 
+  // --- scènes : un clic lance la scène côté serveur (le résultat partiel est signalé) ---
+  var LAUNCH_ERRORS = { unreachable: "injoignable", refused: "refusé", error: "erreur" };
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-scene]");
+    if (!b || b.disabled) return;
+    b.disabled = true;
+    fetch("/scenes/" + encodeURIComponent(b.dataset.scene) + "/launch", {
+      method: "POST", credentials: "same-origin",
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var d = {};
+        try { d = JSON.parse(t); } catch (err) { /* corps non JSON */ }
+        return { ok: r.ok, status: r.status, d: d };
+      });
+    }).then(function (res) {
+      if (res.status === 401) { location.href = "/login"; return; }
+      if (!res.ok) {
+        window.SoundUI.toast(typeof res.d.detail === "string" ? res.d.detail : "Erreur " + res.status, true);
+        return;
+      }
+      var d = res.d;
+      if (d.partial) {
+        window.SoundUI.toast(d.scene + " : " + d.failed.length + " lecteur(s) en échec ("
+          + d.failed.map(function (f) { return f.player + " " + (LAUNCH_ERRORS[f.error] || f.error); }).join(", ")
+          + "), " + d.ok.length + " lancé(s)", true);
+      } else {
+        window.SoundUI.toast("Scène « " + d.scene + " » lancée");
+      }
+      setTimeout(function () { window.SoundUI.refresh("#players"); window.SoundUI.refresh("#queue"); }, 1200);
+    }).catch(function () {
+      window.SoundUI.toast("Serveur injoignable", true);
+    }).then(function () { b.disabled = false; });
+  });
+
+  // --- groupe d'enceintes : coche ses lecteurs (résolution serveur, enceintes actives) ---
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-pick-group]");
+    if (!b) return;
+    fetch("/speaker-groups/" + encodeURIComponent(b.dataset.pickGroup) + "/resolve", {
+      credentials: "same-origin",
+    }).then(function (r) {
+      if (r.status === 401) { location.href = "/login"; return null; }
+      return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+    }).then(function (res) {
+      if (!res) return;
+      if (!res.ok) {
+        window.SoundUI.toast(typeof res.d.detail === "string" ? res.d.detail : "Groupe indisponible", true);
+        return;
+      }
+      var wanted = res.d.player_ids || [], n = 0;
+      document.querySelectorAll("#players [data-sel]").forEach(function (box) {
+        var on = wanted.indexOf(box.dataset.sel) >= 0;
+        box.checked = on;
+        if (on) n++;
+      });
+      if (!n) { window.SoundUI.toast("Aucun lecteur musique dans ce groupe", true); }
+      box_changed();
+    }).catch(function () { window.SoundUI.toast("Serveur injoignable", true); });
+  });
+  function box_changed() {
+    var first = document.querySelector("#players [data-sel]");
+    if (first) first.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
   // --- file : lecteur choisi parmi les lecteurs cochés ---
   function syncPicker() {
     var ids = window.SoundUI.selected();

@@ -30,6 +30,17 @@
 </section>
 
 <section class="card">
+  <h2>Groupes d'enceintes</h2>
+  <div id="speaker-groups" hx-get="/ui/admin/speaker-groups" hx-trigger="load, refresh"></div>
+</section>
+
+<section class="card">
+  <h2>Scènes</h2>
+  <p class="muted small">Un clic sur la page Musique lance le média sur les enceintes actives du groupe. Jamais pendant un incident d'alerte en cours.</p>
+  <div id="scenes" hx-get="/ui/admin/scenes" hx-trigger="load, refresh"></div>
+</section>
+
+<section class="card">
   <h2>Modèles d'alerte</h2>
   <p class="muted small">Un modèle par type d'incident : texte lu sur les enceintes et envoyé sur Teams.</p>
   <div id="alert-templates" hx-get="/ui/admin/alert-templates" hx-trigger="load, refresh"></div>

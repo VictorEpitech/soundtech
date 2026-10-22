@@ -1,0 +1,65 @@
+{% macro fields(sc) %}
+<div class="row">
+  <label class="field grow"><span>Nom</span><input type="text" name="name" value="{{ sc.name if sc else '' }}" required maxlength="100"></label>
+  <label class="field"><span>Icône</span><input class="mono" type="text" name="icon" value="{{ (sc.icon if sc else '') or '' }}" maxlength="64" pattern="[a-z0-9_]+" placeholder="queue_music"></label>
+  <label class="field"><span>Couleur</span><input class="mono" type="text" name="color" value="{{ (sc.color if sc else '') or '' }}" maxlength="7" pattern="#[0-9a-fA-F]{6}" placeholder="#6750a4"></label>
+</div>
+<div class="row">
+  <label class="field grow"><span>Média (URI Music Assistant)</span><input class="mono" type="text" name="media_uri" value="{{ sc.media_uri if sc else '' }}" required maxlength="500" pattern="\S{3,500}"></label>
+  <label class="field"><span>Type</span>
+    <select name="media_type">{% for v, l in media_types %}<option value="{{ v }}" {% if sc and sc.media_type == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  </label>
+  <label class="field"><span>Mode</span>
+    <select name="mode"><option value="play" {% if not sc or sc.mode == 'play' %}selected{% endif %}>Lire maintenant</option><option value="replace" {% if sc and sc.mode == 'replace' %}selected{% endif %}>Remplacer la file</option></select>
+  </label>
+</div>
+<div class="row">
+  <label class="field"><span>Volume (0-100)</span><input type="number" name="volume" min="0" max="100" value="{{ sc.volume if sc and sc.volume is not none else '' }}" inputmode="numeric"></label>
+  <label class="field"><span>Aléatoire</span>
+    <select name="shuffle"><option value="">Inchangé</option><option value="true" {% if sc and sc.shuffle is true %}selected{% endif %}>Activé</option><option value="false" {% if sc and sc.shuffle is false %}selected{% endif %}>Désactivé</option></select>
+  </label>
+  <label class="field"><span>Répétition</span>
+    <select name="repeat"><option value="">Inchangée</option>{% for v, l in (('off', 'Aucune'), ('one', 'Une piste'), ('all', 'Toute la file')) %}<option value="{{ v }}" {% if sc and sc.repeat == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  </label>
+</div>
+<div class="row">
+  <label class="field grow"><span>Groupe</span>
+    <select name="group_id"><option value="">— Aucun —</option>{% for g in groups %}<option value="{{ g.id }}" {% if sc and sc.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>{% endfor %}</select>
+  </label>
+  <label class="field grow"><span>Annonce avant lecture</span>
+    <select name="preset_id"><option value="">— Aucune —</option>{% for p in presets %}<option value="{{ p.id }}" {% if sc and sc.preset_id == p.id %}selected{% endif %}>{{ p.title }}</option>{% endfor %}</select>
+  </label>
+</div>
+<fieldset class="chips">
+  <legend>Enceintes (en plus du groupe)</legend>
+  {% for s in speakers %}
+  <label class="chip"><input type="checkbox" name="speaker_ids" value="{{ s.id }}" {% if sc and s.id in sc.speaker_ids %}checked{% endif %}><span>{{ s.name }}</span></label>
+  {% endfor %}
+</fieldset>
+{% endmacro %}
+<details class="card-sub">
+  <summary class="btn btn-filled"><span class="icon">add</span>Nouvelle scène</summary>
+  <form class="stack" hx-post="/scenes" hx-ext="json-typed" data-json data-arrays="speaker_ids" data-ints="volume" data-bools="shuffle" data-toast="Scène créée" data-refresh="#scenes" hx-swap="none">
+    {{ fields(none) }}
+    <button class="btn btn-filled" type="submit"><span class="icon">add</span>Créer la scène</button>
+  </form>
+</details>
+<ul class="list">
+  {% for sc in rows %}
+  <li>
+    <details>
+      <summary><span class="icon">{{ sc.icon or 'queue_music' }}</span> <strong>{{ sc.name }}</strong>{% if not sc.is_active %} <span class="badge">inactive</span>{% endif %}</summary>
+      <form class="stack" hx-patch="/scenes/{{ sc.id }}" hx-ext="json-typed" data-json data-arrays="speaker_ids" data-ints="volume" data-bools="shuffle" hx-swap="none" data-refresh="#scenes" data-toast="Scène enregistrée">
+        {{ fields(sc) }}
+        <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+      </form>
+    </details>
+    <div class="row">
+      <button class="btn {{ 'btn-tonal' if sc.is_active else 'btn-text' }}" type="button" hx-patch="/scenes/{{ sc.id }}" hx-vals='{"is_active": {{ 'false' if sc.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#scenes"><span class="icon">{{ 'toggle_on' if sc.is_active else 'toggle_off' }}</span>{{ 'Active' if sc.is_active else 'Inactive' }}</button>
+      <button class="btn btn-icon btn-danger" type="button" hx-delete="/scenes/{{ sc.id }}" hx-confirm="Supprimer la scène {{ sc.name }} ?" hx-swap="none" data-refresh="#scenes" title="Supprimer"><span class="icon">delete</span></button>
+    </div>
+  </li>
+  {% else %}
+  <li class="muted">Aucune scène. Une scène lance un média sur un groupe d'enceintes en un clic depuis la page Musique.</li>
+  {% endfor %}
+</ul>

@@ -4,7 +4,7 @@
 <h1>Annonces</h1>
 <section class="card">
   <h2>Nouvelle annonce</h2>
-  <form id="announce-form" class="stack" hx-post="/announcements" hx-ext="json-typed" data-json data-arrays="speaker_ids" data-bools="is_test" data-toast="Annonce envoyée" data-reset data-refresh="#history" hx-confirm="Diffuser cette annonce ?" hx-swap="none">
+  <form id="announce-form" class="stack" hx-post="/announcements" hx-ext="json-typed" data-json data-arrays="speaker_ids,group_ids" data-bools="is_test" data-toast="Annonce envoyée" data-reset data-refresh="#history" hx-confirm="Diffuser cette annonce ?" hx-swap="none">
     {% if presets %}
     <label class="field"><span>Message pré-enregistré</span>
       <select name="preset_id" id="preset-select">
@@ -16,6 +16,14 @@
     <label class="field"><span>Texte</span>
       <textarea name="text" id="free-text" rows="3" maxlength="500" placeholder="Message à diffuser"></textarea>
     </label>
+    {% if groups %}
+    <fieldset class="chips">
+      <legend>Groupes d'enceintes</legend>
+      {% for g in groups %}
+      <label class="chip"><input type="checkbox" name="group_ids" value="{{ g.id }}"><span>{{ g.name }} ({{ g.active_count }})</span></label>
+      {% endfor %}
+    </fieldset>
+    {% endif %}
     <fieldset class="chips">
       <legend>Enceintes</legend>
       {% for s in speakers %}

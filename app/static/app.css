@@ -197,7 +197,7 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 .chips legend { width: 100%; }
 .chip input, .check input { position: absolute; opacity: 0; pointer-events: none; }
 .chip span {
-  display: inline-flex; align-items: center; min-height: 36px; padding: 0 16px;
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
   border: 1px solid var(--outline); border-radius: var(--r-md); cursor: pointer;
   transition: background-color var(--dur) var(--ease-in), color var(--dur) var(--ease-in),
     border-color var(--dur) var(--ease-in);
@@ -374,3 +374,22 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 .table td.mono { white-space: nowrap; }
 .card > h2:not(:first-child) { margin-top: 24px; }
 .card > .row + h2 { margin-top: 24px; }
+
+/* Scènes et groupes d'enceintes */
+.scene-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
+@media (min-width: 640px) { .scene-grid { grid-template-columns: repeat(4, 1fr); } }
+.scene-btn {
+  --tone: var(--primary);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  min-height: 88px; padding: 12px; border: 0; border-radius: var(--r-lg); cursor: pointer;
+  background: color-mix(in srgb, var(--tone) 16%, var(--surface-2)); color: var(--on-surface);
+  font: inherit; font-weight: 500; text-align: center;
+  transition: background-color var(--dur) var(--ease-in), opacity var(--dur) var(--ease-in);
+}
+.scene-btn:hover { background: color-mix(in srgb, var(--tone) 28%, var(--surface-2)); }
+.scene-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.scene-btn .icon { font-size: 32px; color: var(--tone); }
+.scene-btn:disabled { opacity: 0.5; cursor: progress; }
+details > summary { min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+details[open] > summary { margin-bottom: 12px; }
+.card-sub { margin-top: 16px; }

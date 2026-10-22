@@ -8,17 +8,19 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Column,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
+    Table,
     Text,
     UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
@@ -225,4 +227,88 @@ class AlertTemplate(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+speaker_group_members = Table(
+    "speaker_group_members",
+    Base.metadata,
+    Column(
+        "group_id",
+        UUID(as_uuid=True),
+        ForeignKey("speaker_groups.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "speaker_id",
+        UUID(as_uuid=True),
+        ForeignKey("speakers.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+scene_speakers = Table(
+    "scene_speakers",
+    Base.metadata,
+    Column(
+        "scene_id",
+        UUID(as_uuid=True),
+        ForeignKey("scenes.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "speaker_id",
+        UUID(as_uuid=True),
+        ForeignKey("speakers.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
+class SpeakerGroup(Base):
+    __tablename__ = "speaker_groups"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    description: Mapped[str | None] = mapped_column(String(500))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    members: Mapped[list[Speaker]] = relationship(
+        secondary=speaker_group_members, lazy="selectin", order_by=Speaker.name
+    )
+
+
+class Scene(Base):
+    __tablename__ = "scenes"
+    __table_args__ = (
+        CheckConstraint(
+            "media_type IN ('playlist', 'album', 'track', 'radio')", name="ck_scenes_media_type"
+        ),
+        CheckConstraint("mode IN ('play', 'replace')", name="ck_scenes_mode"),
+        CheckConstraint(
+            "volume IS NULL OR (volume >= 0 AND volume <= 100)", name="ck_scenes_volume"
+        ),
+        CheckConstraint(
+            "repeat IS NULL OR repeat IN ('off', 'one', 'all')", name="ck_scenes_repeat"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    icon: Mapped[str | None] = mapped_column(String(64))
+    color: Mapped[str | None] = mapped_column(String(7))
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("speaker_groups.id", ondelete="RESTRICT")
+    )
+    media_uri: Mapped[str] = mapped_column(String(500))
+    media_type: Mapped[str] = mapped_column(String(16))
+    mode: Mapped[str] = mapped_column(String(16), default="play", server_default="play")
+    volume: Mapped[int | None] = mapped_column(Integer)
+    shuffle: Mapped[bool | None] = mapped_column(Boolean)
+    repeat: Mapped[str | None] = mapped_column(String(8))
+    preset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("presets.id", ondelete="SET NULL")
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    speakers: Mapped[list[Speaker]] = relationship(
+        secondary=scene_speakers, lazy="selectin", order_by=Speaker.name
     )

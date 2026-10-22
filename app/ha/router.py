@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import groups
 from app.auth import audit
 from app.auth.deps import get_session, require_role
 from app.config import Settings, get_settings
@@ -295,13 +296,16 @@ class AnnouncementIn(BaseModel):
 
     text: str | None = None
     preset_id: uuid.UUID | None = None
-    speaker_ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_TARGETS)
+    speaker_ids: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_TARGETS)
+    group_ids: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_TARGETS)
     is_test: bool = False
 
     @model_validator(mode="after")
     def _one_source(self) -> "AnnouncementIn":
         if (self.text is None) == (self.preset_id is None):
             raise ValueError("fournir exactement un de text ou preset_id")
+        if not self.speaker_ids and not self.group_ids:
+            raise ValueError("fournir au moins une enceinte ou un groupe")
         return self
 
 
@@ -350,10 +354,14 @@ async def create_announcement(
         raise HTTPException(404, "speaker not found")
     if not all(s.is_active for s in found):
         raise HTTPException(409, "speaker inactive")
+    from_groups: list[Speaker] = []
+    for gid in dict.fromkeys(body.group_ids):
+        from_groups += await groups.resolve_group(session, gid)
+    speakers = groups.dedupe([*(by_id[i] for i in ids), *from_groups])
     ann = service.build_announcement(
         settings,
         text=text,
-        speakers=[by_id[i] for i in ids],
+        speakers=speakers,
         is_test=body.is_test,
         priority=service.priority_for(user),
         author=user,
