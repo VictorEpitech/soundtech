@@ -4,6 +4,7 @@ x-app: &app
   build: .
   restart: unless-stopped
   environment:
+    FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
     DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     REDIS_URL: redis://redis:6379/0
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -36,6 +37,8 @@ x-app: &app
 services:
   api:
     <<: *app
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"
     networks: [internal, edge]
     depends_on:
       db: {condition: service_healthy}
@@ -126,6 +129,7 @@ services:
       db: {condition: service_healthy}
 
   caddy:
+    profiles: [caddy]
     build:
       context: .
       dockerfile: Dockerfile.caddy

@@ -5,7 +5,7 @@ Remplace `sound.exemple.fr` par ton domaine. Les valeurs sensibles se saisissent
 
 ## 0. Prérequis
 - Un domaine (ex. `sound.exemple.fr`) dont le DNS (enregistrement A) pointe vers l'IP publique de l'annexe.
-- Ports 80 et 443 redirigés vers l'annexe (variables `HTTP_PORT`/`HTTPS_PORT` pour changer les ports publiés ; le challenge Let's Encrypt exige que 80 ou 443 soit joignable depuis Internet, sinon place un proxy devant).
+- Derrière un Apache/Nginx existant (cas Epitech) : Caddy est désactivé par défaut ; publie l'API avec `API_BIND`/`API_PORT` et pointe le proxy dessus (voir `.env.example`). Sinon `COMPOSE_PROFILES=caddy` et ports 80/443 joignables.
 - L'annexe joint Home Assistant et Music Assistant sur le LAN.
 - Dépôt GitHub en **privé** avec ce code poussé sur `main`.
 - Si un reverse proxy occupe déjà 80/443 sur l'annexe : voir README (Caddy derrière un proxy existant) avant de continuer.
