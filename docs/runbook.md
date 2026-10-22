@@ -90,3 +90,10 @@ Le worker exécute le cron `run_schedules` chaque minute ; journal : Admin > Pla
 - **Doublon suspecté** : impossible par construction (contrainte `UNIQUE (schedule_id, scheduled_for)`) ; deux lignes `schedule` à des heures différentes viennent d'une modification de l'heure.
 - **Heure d'été/hiver** : 02:30 le jour du passage à l'heure d'été s'exécute à 03:30 ; à l'heure d'hiver, une seule fois.
 - **Alerte en cours** : les planifications sont ignorées (`skipped_alert`), jamais reportées.
+
+## PWA (installation mobile, service worker)
+
+- **Installer** : ouvrir le site en HTTPS (obligatoire : sans HTTPS ni `localhost`, ni service worker ni installation). Android/Chrome : menu > « Installer l'application ». iOS/Safari : Partager > « Sur l'écran d'accueil ». Appui long sur l'icône : raccourci « Alerte ».
+- **Mettre à jour le SW** : rien à faire, la version est le hash des fichiers de `app/static` ; après déploiement, `/sw.js` change, le navigateur installe le nouveau SW et purge les anciens caches `sound-shell-*` (au prochain rechargement). Forcer : DevTools > Application > Service Workers > Unregister, ou vider les données du site.
+- **Page obsolète/bloquée** : vérifier que `/sw.js` répond `Cache-Control: no-cache` (le proxy ne doit pas le cacher).
+- **Hors ligne** : la page `/offline` rappelle que les alertes/annonces ne partent pas ; repli = sirène ou téléphone. Aucune donnée ni alerte n'est jamais mise en cache.

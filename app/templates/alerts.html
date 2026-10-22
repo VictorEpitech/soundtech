@@ -15,7 +15,7 @@
   {% if not templates %}
   <p class="muted">Aucun modèle d'alerte actif. Un administrateur peut en configurer dans Admin.</p>
   {% else %}
-  <div class="alert-grid" id="alert-grid" data-alert-word="{{ alert_word }}" data-test-word="{{ test_word }}">
+  <div class="alert-grid" id="alert-grid" tabindex="-1" aria-label="Types d'alerte" data-alert-word="{{ alert_word }}" data-test-word="{{ test_word }}">
     {% for t in templates %}
     <button type="button" class="alert-btn" data-type="{{ t.type }}" data-label="{{ t.label }}" data-title="{{ t.title }}" data-message="{{ t.message }}"{% if t.color %} style="--tone: {{ t.color }}; --on-tone: #fff"{% endif %}>
       <span class="icon">{{ t.icon or 'warning' }}</span>

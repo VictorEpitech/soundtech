@@ -26,6 +26,7 @@ from app.ma import router as ma_api
 from app.models import Announcement, Priority, Role, ScheduleRunStatus, User
 from app.models import Response as ResponseRow
 from app.planning import router as planning_api
+from app.ui import pwa
 from app.ui.deps import PageError, PageRedirect, admin_page, optional_user, staff_page
 
 BASE = Path(__file__).resolve().parent.parent
@@ -51,6 +52,7 @@ def render(request: Request, name: str, user: User | None = None, **ctx: Any) ->
 
 def register(app: FastAPI) -> None:
     app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
+    app.include_router(pwa.router)
     app.include_router(router)
 
     @app.exception_handler(PageRedirect)

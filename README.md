@@ -81,3 +81,7 @@ Routes staff+admin : `GET /incidents/{id}/responses` (répondants, non-répondan
 RGPD : `RESPONSE_RETENTION_DAYS` (défaut 90, 0 = illimitée) ; purge quotidienne (03:15) par cron arq (`responses_purge` audité). Les réponses sont personnelles : aucune donnée réelle dans le dépôt ni les tests.
 
 Variables : `TEAMS_APP_ID`, `TEAMS_APP_SECRET`, `TEAMS_TENANT_ID`, `TEAMS_SERVICE_URL`, `TEAMS_CONVERSATION_ID`, `ROSTER_GROUP_ID`, `ROSTER_CACHE_TTL`, `ROSTER_TIMEOUT`, `RESPONSE_RETENTION_DAYS`, `REMIND_COOLDOWN`. Non testé contre un vrai tenant : JWT réel du connecteur, format de réponse d'invoke, mentions de relance (ids AAD), permissions Graph.
+
+## PWA / mobile (phase 12)
+
+`/manifest.webmanifest` (nom Sound, standalone, raccourci « Alerte » vers `/alerts`), icônes PNG dans `app/static/icons` (régénérables : `python scripts/gen_icons.py`, Pillow), service worker `/sw.js` (racine, `Cache-Control: no-cache`) et page `/offline` publique. Le SW ne met en cache que la coquille statique (`/static/*` + `/offline`) ; navigations réseau d'abord ; jamais d'API, de pages authentifiées, d'alertes ni de SSE. Version = hash du contenu statique : tout changement invalide l'ancien cache. Bouton flottant rouge « Alerte » (staff/admin, absent de `/login` et de `/alerts`) : 1er geste = ouvre la grille `/alerts#alert-grid`, 2e geste = type + confirmation serveur inchangée (exercice / mot ALERTE). Bandeau hors-ligne et envoi bloqué côté interface sans réseau. La PWA exige HTTPS (Caddy en prod). Non vérifié dans un vrai navigateur ni sur un téléphone.

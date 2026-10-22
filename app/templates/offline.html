@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Hors ligne{% endblock %}
+{% block content %}
+<section class="card login">
+  <h1>Hors ligne</h1>
+  <p class="banner-test"><strong>Hors ligne : les alertes et annonces ne peuvent pas être envoyées.</strong></p>
+  <p>La connexion au serveur est indisponible. Rien n'a été envoyé.</p>
+  <p><strong>En cas d'urgence, utilisez le repli : déclenchez la sirène ou appelez par téléphone.</strong></p>
+  <button class="btn btn-filled" type="button" onclick="location.reload()">Réessayer</button>
+</section>
+{% endblock %}
