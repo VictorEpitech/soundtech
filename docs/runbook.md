@@ -97,3 +97,22 @@ Le worker exécute le cron `run_schedules` chaque minute ; journal : Admin > Pla
 - **Mettre à jour le SW** : rien à faire, la version est le hash des fichiers de `app/static` ; après déploiement, `/sw.js` change, le navigateur installe le nouveau SW et purge les anciens caches `sound-shell-*` (au prochain rechargement). Forcer : DevTools > Application > Service Workers > Unregister, ou vider les données du site.
 - **Page obsolète/bloquée** : vérifier que `/sw.js` répond `Cache-Control: no-cache` (le proxy ne doit pas le cacher).
 - **Hors ligne** : la page `/offline` rappelle que les alertes/annonces ne partent pas ; repli = sirène ou téléphone. Aucune donnée ni alerte n'est jamais mise en cache.
+
+## Rapport post-incident PDF
+
+`GET /incidents/{id}/report.pdf` (staff/admin, bouton « Rapport PDF » sur `/alerts/{id}`) génère à la demande un PDF A4 : chronologie (heure de Paris), message, diffusion TTS/Teams, taux de réponse, personnes en danger, non-répondants. Si le roster est indisponible, le rapport est produit avec la mention « roster indisponible » (pas d'erreur 502, contrairement à l'export CSV). Le PDF contient des données personnelles sensibles (RGPD) : ne pas le diffuser hors cellule de crise ; les réponses sont purgées après `RESPONSE_RETENTION_DAYS`. Chaque export est tracé (`incident_report_export`, id et acteur, sans contenu) ; limite : `ALERT_RATE_LIMIT` par fenêtre. Rien n'est stocké côté serveur.
+
+## Relances automatiques et notifications admin
+
+**Générer les clés VAPID** (une fois, à conserver : les changer invalide tous les abonnements) :
+`python scripts/gen_vapid.py` (ou `docker compose run --rm --entrypoint python worker /dev/stdin < scripts/gen_vapid.py`). Reporter `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY` et `VAPID_SUBJECT` (`mailto:` de l'exploitant) dans le `.env`, puis redéployer api + worker. Chaque admin/staff clique ensuite sur « Activer les notifications » dans l'en-tête (permission navigateur ; HTTPS obligatoire ; iOS : PWA installée sur l'écran d'accueil).
+
+**Les notifications ne partent pas** :
+1. Bouton absent : clés VAPID non configurées côté api (`GET /push/vapid-public-key` doit renvoyer `enabled: true`).
+2. Aucun abonnement : table `push_subscriptions` vide ou permission refusée dans le navigateur ; se réabonner.
+3. Logs du worker (`push failed`, `notification ... failed`) : 401/403 = clés ou `VAPID_SUBJECT` incorrects ; 404/410 = abonnement expiré, supprimé automatiquement.
+4. Déclencheur déjà consommé : une ligne `incident_notifications` avec `delivered_at` non nul ne repart jamais ; sans livraison, 3 tentatives puis abandon (voir `attempts`).
+5. Repli Teams 1:1 : renseigner `NOTIFY_TEAMS_USER_IDS` (oid Entra) ; le bot doit être installé chez ces utilisateurs.
+6. Seuls les incidents `sent` sont suivis ; les seuils sont `NOTIFY_*` (0 = désactivé).
+
+**Les relances automatiques ne partent pas** : roster non configuré (`ROSTER_GROUP_ID`), `AUTO_REMIND_INTERVAL`/`AUTO_REMIND_MAX` à 0 ou surcharge de l'incident, cooldown `REMIND_COOLDOWN` actif (relance manuelle récente), plafond atteint (compteur sur le récap), tout le monde a répondu. Audit : `auto_remind` (succès), `auto_remind_failed` (roster ou Teams, une fois par série ; retry chaque minute). Le worker doit avoir les variables `TEAMS_*`, `ROSTER_GROUP_ID` et `ENTRA_*` (présentes dans `docker-compose.yml`).

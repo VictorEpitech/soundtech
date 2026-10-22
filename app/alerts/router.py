@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -10,14 +10,14 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.alerts import responses, service
+from app.alerts import autoremind, report_pdf, responses, service
 from app.alerts.roster import RosterProvider, get_roster_provider
 from app.alerts.teams import IncidentNotice, TeamsError, TeamsNotifier, get_notifier
 from app.auth import audit
 from app.auth.deps import get_session, require_role
 from app.config import Settings, get_settings
 from app.ha.router import get_redis
-from app.models import AlertTemplate, Incident, IncidentType, Role, User
+from app.models import AlertTemplate, Announcement, AuditLog, Incident, IncidentType, Role, User
 
 staff_up = require_role(Role.admin, Role.staff)
 
@@ -39,6 +39,8 @@ class IncidentIn(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     message: str = Field(min_length=1)
     is_test: bool = False
+    auto_remind_interval: int | None = Field(default=None, ge=0, le=86400)
+    auto_remind_max: int | None = Field(default=None, ge=0, le=50)
 
     @field_validator("title", "message")
     @classmethod
@@ -49,6 +51,13 @@ class IncidentIn(BaseModel):
         return v
 
 
+class AutoRemindIn(BaseModel):
+    """Surcharge par incident ; `null` = valeur globale, 0 = relances désactivées."""
+
+    interval: int | None = Field(default=None, ge=0, le=86400)
+    max: int | None = Field(default=None, ge=0, le=50)
+
+
 class SendIn(BaseModel):
     confirm: str = Field(max_length=64)
 
@@ -57,7 +66,8 @@ def _iso(d: datetime | None) -> str | None:
     return d.isoformat() if isinstance(d, datetime) else None
 
 
-def _out(i: Incident) -> dict[str, Any]:
+def _out(i: Incident, settings: Settings | None = None) -> dict[str, Any]:
+    interval, mx = autoremind.effective(i, settings or get_settings())
     return {
         "id": str(i.id),
         "type": i.type,
@@ -72,6 +82,13 @@ def _out(i: Incident) -> dict[str, Any]:
         "created_at": _iso(i.created_at),
         "sent_at": _iso(i.sent_at),
         "closed_at": _iso(i.closed_at),
+        "auto_remind": {
+            "interval": interval,
+            "max": mx,
+            "count": i.auto_remind_count,
+            "last_at": _iso(i.auto_remind_last_at),
+            "overridden": i.auto_remind_interval is not None or i.auto_remind_max is not None,
+        },
     }
 
 
@@ -134,6 +151,8 @@ async def _create_draft(
     title: str,
     message: str,
     is_test: bool,
+    auto_remind_interval: int | None = None,
+    auto_remind_max: int | None = None,
 ) -> Incident:
     if len(message) > settings.announcement_max_length:
         raise HTTPException(422, f"message too long (max {settings.announcement_max_length})")
@@ -143,6 +162,8 @@ async def _create_draft(
         title=title,
         message=message,
         is_test=is_test,
+        auto_remind_interval=auto_remind_interval,
+        auto_remind_max=auto_remind_max,
         status="draft",
         created_by=user.id,
         created_by_email=user.email,
@@ -213,6 +234,8 @@ async def create_incident(
         title=body.title,
         message=body.message,
         is_test=body.is_test,
+        auto_remind_interval=body.auto_remind_interval,
+        auto_remind_max=body.auto_remind_max,
     )
     return _out(i)
 
@@ -371,6 +394,71 @@ async def export_csv(
     )
 
 
+@router.get("/{incident_id}/report.pdf")
+async def report_pdf_export(
+    incident_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+    settings: Settings = Depends(get_settings),
+    roster: RosterProvider = Depends(get_roster),
+    user: User = Depends(staff_up),
+) -> Response:
+    await _rate_limit(redis, settings, user, "report")
+    incident = await _get(session, incident_id)
+    data, _missing = await responses.report(session, roster, incident_id)
+    ann = (
+        await session.get(Announcement, incident.announcement_id)
+        if incident.announcement_id
+        else None
+    )
+    speakers = [
+        str(t.get("name") or t.get("entity_id") or "") for t in (ann.targets if ann else [])
+    ]
+    reminders = list(
+        (
+            await session.scalars(
+                select(AuditLog.ts)
+                .where(
+                    AuditLog.action.in_(("incident_remind", "auto_remind")),
+                    AuditLog.detail["incident_id"].as_string() == str(incident_id),
+                )
+                .order_by(AuditLog.ts)
+            )
+        ).all()
+    )
+    now = datetime.now(UTC)
+    pdf = report_pdf.build_pdf(
+        report_pdf.ReportInput(
+            incident=_out(incident),
+            data=data,
+            speakers=speakers,
+            reminders=reminders,
+            actor=user.email or "",
+            retention_days=settings.response_retention_days,
+            now=now,
+        )
+    )
+    audit.record(
+        session,
+        "incident_report_export",
+        request=request,
+        user_id=user.id,
+        actor=user.email,
+        detail={"incident_id": str(incident_id)},
+    )
+    return Response(
+        pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{report_pdf.safe_filename(incident_id, now)}"'
+            ),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.post("/{incident_id}/remind")
 async def remind(
     incident_id: uuid.UUID,
@@ -430,6 +518,35 @@ async def remind(
         detail={"incident_id": str(incident_id), "targets": len(missing)},
     )
     return {**detail, "reminded": detail.get("mentioned", len(missing))}
+
+
+@router.patch("/{incident_id}/auto-remind")
+async def set_auto_remind(
+    incident_id: uuid.UUID,
+    body: AutoRemindIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+    settings: Settings = Depends(get_settings),
+    user: User = Depends(staff_up),
+) -> dict[str, Any]:
+    await _rate_limit(redis, settings, user, "auto-remind")
+    incident = await _get(session, incident_id)
+    if incident.status == "closed":
+        raise HTTPException(409, "incident is closed")
+    incident.auto_remind_interval = body.interval
+    incident.auto_remind_max = body.max
+    incident.auto_remind_failures = 0  # reprise explicite après un arrêt sur échecs
+    audit.record(
+        session,
+        "incident_auto_remind_config",
+        request=request,
+        user_id=user.id,
+        actor=user.email,
+        detail={"incident_id": str(incident_id), "interval": body.interval, "max": body.max},
+    )
+    await session.flush()
+    return _out(incident, settings)
 
 
 @router.get("/{incident_id}/stream")

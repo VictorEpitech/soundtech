@@ -6,7 +6,9 @@ from arq import cron
 from arq.connections import RedisSettings
 from redis.asyncio import Redis
 
-from app.alerts import responses
+from app.alerts import autoremind, responses, watch
+from app.alerts.roster import get_roster_provider
+from app.alerts.teams import get_notifier
 from app.auth import audit
 from app.config import get_settings
 from app.db import SessionLocal
@@ -31,6 +33,8 @@ async def startup(ctx: dict[str, Any]) -> None:
     ctx["redis"] = Redis.from_url(settings.redis_url)
     ctx["ha"] = HAClient.from_settings(settings) if settings.ha_configured else None
     ctx["ma"] = MAClient.from_settings(settings) if settings.ma_configured else None
+    ctx["roster"] = get_roster_provider(settings)
+    ctx["teams"] = get_notifier(settings)
     ctx["ma_monitor"] = (
         asyncio.create_task(monitor.run(ctx["ma"])) if ctx["ma"] is not None else None
     )
@@ -86,12 +90,40 @@ async def run_schedules(ctx: dict[str, Any]) -> int:
     return n
 
 
+async def auto_remind(ctx: dict[str, Any]) -> int:
+    """Relances automatiques des non-répondants ; isolé : n'affecte jamais les autres tâches."""
+    try:
+        n = await autoremind.tick(
+            SessionLocal, ctx["redis"], get_settings(), ctx["roster"], ctx["teams"]
+        )
+    except Exception:
+        log.exception("relances automatiques en échec")
+        return 0
+    if n:
+        log.info("relances automatiques : %d envoyée(s)", n)
+    return n
+
+
+async def notify_staff(ctx: dict[str, Any]) -> int:
+    """Notifications admin/staff (push, repli Teams 1:1) ; isolé : aucune erreur ne remonte."""
+    try:
+        n = await watch.tick(SessionLocal, get_settings(), ctx["roster"], ctx["teams"])
+    except Exception:
+        log.exception("notifications admin en échec")
+        return 0
+    if n:
+        log.info("notifications admin : %d traitée(s)", n)
+    return n
+
+
 class WorkerSettings:
     functions = [ping]
     cron_jobs = [
         cron(drain_announcements, second=set(range(60)), run_at_startup=True),
         cron(reap_volumes, second={0, 15, 30, 45}, run_at_startup=True),
         cron(run_schedules, second={5}, run_at_startup=True),
+        cron(auto_remind, second={10}),
+        cron(notify_staff, second={25}),
         cron(purge_responses, hour={3}, minute={15}),
     ]
     on_startup = startup

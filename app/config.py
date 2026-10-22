@@ -84,6 +84,20 @@ class Settings(BaseSettings):
     roster_cache_ttl: int = 120
     response_retention_days: int = 90
     remind_cooldown: int = 300
+    auto_remind_interval: int = Field(default=600, ge=0, le=86400)  # s ; 0 = désactivé
+    auto_remind_max: int = Field(default=3, ge=0, le=50)  # 0 = désactivé
+    auto_remind_lock_ttl: int = Field(default=120, ge=10)
+
+    vapid_private_key: SecretStr = SecretStr("")
+    vapid_public_key: str = ""
+    vapid_subject: str = ""
+    push_allowed_hosts: str = ""  # suffixes d'hôtes push supplémentaires, séparés par des virgules
+    push_timeout: float = Field(default=5.0, ge=1, le=30)
+    rl_push_limit: int = 30
+    notify_no_response_min: int = Field(default=5, ge=0)  # 0 = déclencheur désactivé
+    notify_rate_threshold: int = Field(default=50, ge=0, le=100)  # % ; 0 = désactivé
+    notify_rate_after_min: int = Field(default=15, ge=0)
+    notify_teams_user_ids: str = ""  # identifiants Entra (oid) séparés par des virgules
 
     @field_validator("ha_tts_service")
     @classmethod
@@ -105,6 +119,18 @@ class Settings(BaseSettings):
             and self.teams_service_url
             and self.teams_conversation_id
         )
+
+    @property
+    def push_configured(self) -> bool:
+        return bool(
+            self.vapid_private_key.get_secret_value()
+            and self.vapid_public_key
+            and self.vapid_subject
+        )
+
+    @property
+    def notify_teams_ids(self) -> list[str]:
+        return [x.strip() for x in self.notify_teams_user_ids.split(",") if x.strip()]
 
     @property
     def ma_configured(self) -> bool:

@@ -41,6 +41,9 @@
     </nav>
     <div class="who">
       <span class="mono">{{ role_labels.get(user.role, user.role) }}</span>
+      {% if user.role in ('admin', 'staff') %}
+      <button class="btn btn-text" type="button" data-push-toggle hidden aria-pressed="false" title="Activer les notifications"><span class="icon" aria-hidden="true">notifications</span><span class="push-label">Activer les notifications</span></button>
+      {% endif %}
       <button class="btn btn-text" type="button" data-logout title="Se déconnecter"><span class="icon">logout</span></button>
     </div>
   </header>

@@ -40,11 +40,21 @@
     <h2>Réponses</h2>
     <div class="row">
       <a class="btn btn-tonal" href="/incidents/{{ incident.id }}/export.csv"><span class="icon">download</span>Export CSV</a>
+      <a class="btn btn-tonal" href="/incidents/{{ incident.id }}/report.pdf"><span class="icon">picture_as_pdf</span>Rapport PDF</a>
       {% if incident.status == 'sent' %}
       <button class="btn btn-filled" type="button" hx-post="/incidents/{{ incident.id }}/remind" hx-confirm="Relancer les non-répondants sur Teams ?" hx-swap="none" data-toast="Relance envoyée" data-refresh="#responses"><span class="icon">notifications_active</span>Relancer les non-répondants</button>
       {% endif %}
     </div>
   </div>
+  {% set ar = incident.auto_remind %}
+  <p class="muted small" id="auto-remind-status"><span class="icon" aria-hidden="true">schedule_send</span> Relances automatiques : <strong class="mono">{{ ar.count }} / {{ ar.max if ar.interval > 0 and ar.max > 0 else 0 }}</strong>{% if ar.interval > 0 and ar.max > 0 %} (toutes les {{ (ar.interval / 60) | round(1) }} min){% else %} (désactivées){% endif %}{% if ar.last_at %}, dernière le <span class="mono">{{ ar.last_at[:19] | replace('T', ' ') }}</span>{% endif %}</p>
+  {% if incident.status in ('draft', 'sent', 'failed') %}
+  <form class="row" hx-patch="/incidents/{{ incident.id }}/auto-remind" hx-ext="json-typed" data-json data-ints="interval,max" hx-swap="none" data-toast="Relances automatiques enregistrées" data-reload>
+    <label class="field"><span>Intervalle (s, vide = défaut, 0 = off)</span><input type="number" name="interval" min="0" max="86400" value="{{ ar.interval if ar.overridden else '' }}"></label>
+    <label class="field"><span>Plafond (vide = défaut)</span><input type="number" name="max" min="0" max="50" value="{{ ar.max if ar.overridden else '' }}"></label>
+    <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+  </form>
+  {% endif %}
   <div id="responses" hx-get="/ui/alerts/{{ incident.id }}/responses" hx-trigger="load, refresh" data-sse="/incidents/{{ incident.id }}/stream"></div>
 </section>
 {% endblock %}

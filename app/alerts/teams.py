@@ -21,7 +21,11 @@ RESPONSE_VERB = "incident_response"
 
 
 class TeamsError(Exception):
-    pass
+    """`mentioned_ids` : destinataires déjà mentionnés avant un échec partiel de relance."""
+
+    def __init__(self, *args: object, mentioned_ids: list[str] | None = None) -> None:
+        super().__init__(*args)
+        self.mentioned_ids: list[str] = mentioned_ids or []
 
 
 @dataclass(frozen=True)
@@ -86,6 +90,10 @@ class TeamsNotifier(Protocol):
         """Relance les `targets` (carte « RAPPEL » + mentions). Lève `TeamsError` en cas d'échec."""
         ...
 
+    async def notify_user(self, aad_id: str, text: str) -> dict[str, Any]:
+        """Message 1:1 à un utilisateur (texte brut, sans donnée personnelle). Lève `TeamsError`."""
+        ...
+
 
 class LogTeamsNotifier:
     """Défaut sans configuration : journalise seulement."""
@@ -101,6 +109,10 @@ class LogTeamsNotifier:
             len(targets),
         )
         return {"skipped": "teams not configured", "targets": len(targets)}
+
+    async def notify_user(self, aad_id: str, text: str) -> dict[str, Any]:
+        log.warning("teams not configured: 1:1 notification not sent")
+        return {"skipped": "teams not configured"}
 
 
 class GraphTeamsNotifier:
@@ -183,9 +195,45 @@ class GraphTeamsNotifier:
                 for m in batch
             ]
             text = " ".join(e["text"] for e in entities)
-            out = await self._post(self._card_activity(notice, "RAPPEL :", text, entities))
+            try:
+                out = await self._post(self._card_activity(notice, "RAPPEL :", text, entities))
+            except TeamsError as exc:
+                raise TeamsError(str(exc), mentioned_ids=[m.aad_id for m in targets[:i]]) from None
             mentioned += len(batch)
         return {**out, "targets": len(targets), "mentioned": mentioned}
+
+    async def notify_user(self, aad_id: str, text: str) -> dict[str, Any]:
+        """Message 1:1 : ouvre (ou retrouve) la conversation personnelle puis y poste `text`."""
+        s = self._s
+        tenant = s.teams_tenant_id or s.entra_tenant_id
+        base = s.teams_service_url.rstrip("/")
+        try:
+            async with httpx.AsyncClient(timeout=s.teams_timeout, transport=self._transport) as h:
+                headers = {"Authorization": f"Bearer {await self._token(h)}"}
+                r = await h.post(
+                    f"{base}/v3/conversations",
+                    json={
+                        "isGroup": False,
+                        "bot": {"id": s.teams_app_id},
+                        "members": [{"id": aad_id}],
+                        "tenantId": tenant,
+                        "channelData": {"tenant": {"id": tenant}},
+                    },
+                    headers=headers,
+                )
+                r.raise_for_status()
+                conv = str(r.json()["id"])
+                r = await h.post(
+                    f"{base}/v3/conversations/{conv}/activities",
+                    json={"type": "message", "text": text},
+                    headers=headers,
+                )
+                r.raise_for_status()
+                return {"activity_id": r.json().get("id")}
+        except httpx.HTTPStatusError as exc:
+            raise TeamsError(f"teams http {exc.response.status_code}") from None
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            raise TeamsError(f"teams error: {type(exc).__name__}") from None
 
 
 def get_notifier(settings: Settings) -> TeamsNotifier:

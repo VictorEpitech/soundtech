@@ -110,6 +110,7 @@ a { color: var(--primary); }
   color: var(--on-surface); text-decoration: none;
 }
 .who { display: flex; align-items: center; gap: 4px; }
+.who .push-label { display: none; }
 .who .mono { display: none; color: var(--on-surface-variant); }
 
 .nav {
@@ -268,6 +269,7 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
   .fab-alert { bottom: calc(24px + var(--safe-b)); }
   .appbar { padding: 12px 32px; gap: 24px; }
   .who .mono { display: inline; }
+  .who .push-label { display: inline; }
   .nav {
     position: static; height: auto; padding: 0; flex: 1; justify-content: flex-start; gap: 4px; background: none;
   }

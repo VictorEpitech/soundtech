@@ -21,6 +21,7 @@ from app.logging import setup_logging
 from app.ma.router import router as music_router
 from app.planning.router import closures_router
 from app.planning.router import router as schedules_router
+from app.push import router as push_router
 from app.scenes import router as scenes_router
 from app.ui.router import register as register_ui
 
@@ -55,6 +56,7 @@ app.include_router(groups_router)
 app.include_router(scenes_router)
 app.include_router(schedules_router)
 app.include_router(closures_router)
+app.include_router(push_router)
 app.include_router(bot_router)
 register_ui(app)
 

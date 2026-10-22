@@ -195,6 +195,12 @@ class Incident(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Relances automatiques : surcharges par incident (NULL = config globale, 0 = désactivé)
+    auto_remind_interval: Mapped[int | None] = mapped_column(Integer)
+    auto_remind_max: Mapped[int | None] = mapped_column(Integer)
+    auto_remind_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    auto_remind_failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    auto_remind_last_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ResponseStatus(enum.StrEnum):
@@ -453,3 +459,38 @@ class PlanningSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     observe_holidays: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class PushSubscription(Base):
+    """Abonnement Web Push d'un navigateur (admin/staff) ; l'endpoint est unique."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    endpoint: Mapped[str] = mapped_column(String(2048), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(255))
+    auth: Mapped[str] = mapped_column(String(255))
+    user_agent: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IncidentNotification(Base):
+    """Déclencheur de notification admin déjà traité : un (incident, clé) ne notifie qu'une fois."""
+
+    __tablename__ = "incident_notifications"
+    __table_args__ = (UniqueConstraint("incident_id", "key", name="uq_incident_notifications_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(32))
+    key: Mapped[str] = mapped_column(String(100))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
