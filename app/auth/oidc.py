@@ -64,7 +64,12 @@ async def exchange_code(s: Settings, code: str, verifier: str) -> str:
             },
         )
     if r.status_code != 200:
-        raise OIDCError(f"token endpoint returned {r.status_code}")
+        try:
+            body = r.json()
+            err = f"{body.get('error')}: {str(body.get('error_description', ''))[:160]}"
+        except ValueError:
+            err = "corps non JSON"
+        raise OIDCError(f"token endpoint returned {r.status_code} ({err})")
     id_token = r.json().get("id_token")
     if not id_token:
         raise OIDCError("no id_token in token response")
