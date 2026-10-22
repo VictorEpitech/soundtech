@@ -103,7 +103,9 @@ services:
       retries: 5
 
   backup:
-    image: postgres:16
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
     restart: unless-stopped
     environment:
       PGHOST: db
@@ -117,13 +119,6 @@ services:
       - sh
       - -c
       - 'while true; do /scripts/backup.sh || echo "backup en echec" >&2; sleep "$${BACKUP_INTERVAL_SECONDS}"; done'
-    configs:
-      - source: backup_script
-        target: /scripts/backup.sh
-        mode: 0755
-      - source: restore_script
-        target: /scripts/restore.sh
-        mode: 0755
     volumes:
       - backups:/backups
     networks: [internal]
@@ -131,16 +126,17 @@ services:
       db: {condition: service_healthy}
 
   caddy:
-    image: caddy:2
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN}
+      HTTP_PORT: ${HTTP_PORT:-80}
+      HTTPS_PORT: ${HTTPS_PORT:-443}
     ports:
-      - "80:80"
-      - "443:443"
-    configs:
-      - source: caddyfile
-        target: /etc/caddy/Caddyfile
+      - "${HTTP_PORT:-80}:${HTTP_PORT:-80}"
+      - "${HTTPS_PORT:-443}:${HTTPS_PORT:-443}"
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -152,14 +148,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-configs:
-  caddyfile:
-    file: ./Caddyfile
-  backup_script:
-    file: ./scripts/backup.sh
-  restore_script:
-    file: ./scripts/restore.sh
 
 networks:
   internal:

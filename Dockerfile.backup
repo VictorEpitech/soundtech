@@ -1,0 +1,3 @@
+FROM postgres:16
+COPY scripts/backup.sh scripts/restore.sh /scripts/
+RUN chmod 0755 /scripts/*.sh

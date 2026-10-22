@@ -9,4 +9,3 @@ __pycache__
 tests
 *.md
 docker-compose.yml
-Caddyfile

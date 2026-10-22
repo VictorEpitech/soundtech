@@ -24,7 +24,7 @@ Sondes : `/healthz` (liveness), `/readyz` (Postgres + Redis).
 
 ## Exploitation (phase 7)
 
-Service `backup` (postgres:16) : dump quotidien compressé dans le volume `backups`, rétention `BACKUP_RETENTION_DAYS` (défaut 14), intervalle `BACKUP_INTERVAL_SECONDS` (défaut 86400). Scripts `scripts/backup.sh` et `scripts/restore.sh` (restauration destructive, confirmation par saisie du nom de la base), montés dans le conteneur sous `/scripts`. Procédures (déploiement, rollback, restauration, pannes, rotation des secrets, test grandeur nature, purge RGPD) : `docs/runbook.md`.
+Service `backup` (postgres:16) : dump quotidien compressé dans le volume `backups`, rétention `BACKUP_RETENTION_DAYS` (défaut 14), intervalle `BACKUP_INTERVAL_SECONDS` (défaut 86400). Scripts `scripts/backup.sh` et `scripts/restore.sh` (restauration destructive, confirmation par saisie du nom de la base), copiés dans l'image `Dockerfile.backup` sous `/scripts`. Procédures (déploiement, rollback, restauration, pannes, rotation des secrets, test grandeur nature, purge RGPD) : `docs/runbook.md`.
 
 ## Home Assistant (annonces TTS)
 
