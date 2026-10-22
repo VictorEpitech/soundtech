@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     ha_retries: int = 2
     test_prefix: str = "Ceci est un test."
     announcement_max_length: int = 500
+    announce_voices: list[str] = [
+        "Celine", "Mathieu", "Lea", "Vicki", "Hans", "Marlene", "Amy", "Brian",
+        "Conchita", "Enrique",
+    ]  # fmt: skip
+    announce_langs: list[str] = ["fr-FR", "en-GB", "de-DE", "es-ES"]
+    announce_default_voice: str | None = None
+    announce_default_lang: str | None = None
+    announce_wpm: int = 150
 
     ma_url: str = ""
     ma_token: SecretStr = SecretStr("")

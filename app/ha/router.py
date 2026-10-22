@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator, model_validator
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -13,8 +13,9 @@ from app import groups
 from app.auth import audit
 from app.auth.deps import get_session, require_role
 from app.config import Settings, get_settings
-from app.ha import service
-from app.models import Announcement, Preset, Role, Speaker, User
+from app.ha import history, service
+from app.ha.ssml import build_ssml, validate_voice_lang
+from app.models import AnnounceDefaults, Announcement, Preset, Role, Speaker, User
 from app.ratelimit import per_user
 
 admin_only = require_role(Role.admin)
@@ -299,6 +300,8 @@ class AnnouncementIn(BaseModel):
     speaker_ids: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_TARGETS)
     group_ids: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_TARGETS)
     is_test: bool = False
+    voice: str | None = Field(default=None, max_length=32)
+    lang: str | None = Field(default=None, max_length=16)
 
     @model_validator(mode="after")
     def _one_source(self) -> "AnnouncementIn":
@@ -309,6 +312,11 @@ class AnnouncementIn(BaseModel):
         return self
 
 
+class DefaultsIn(BaseModel):
+    voice: str | None = Field(default=None, max_length=32)
+    lang: str | None = Field(default=None, max_length=16)
+
+
 def _ann_out(a: Announcement) -> dict[str, Any]:
     return {
         "id": str(a.id),
@@ -316,6 +324,8 @@ def _ann_out(a: Announcement) -> dict[str, Any]:
         "text": a.text,
         "priority": a.priority,
         "is_test": a.is_test,
+        "voice": a.voice,
+        "lang": a.lang,
         "status": a.status,
         "targets": a.targets,
         "results": a.results,
@@ -323,6 +333,59 @@ def _ann_out(a: Announcement) -> dict[str, Any]:
         "started_at": a.started_at.isoformat() if a.started_at else None,
         "finished_at": a.finished_at.isoformat() if a.finished_at else None,
     }
+
+
+async def get_defaults(session: AsyncSession, settings: Settings) -> dict[str, str | None]:
+    row = await session.get(AnnounceDefaults, 1)
+    if row is not None:
+        return {"voice": row.voice, "lang": row.lang}
+    return {"voice": settings.announce_default_voice, "lang": settings.announce_default_lang}
+
+
+async def _voice_lang(
+    session: AsyncSession, settings: Settings, body: AnnouncementIn
+) -> tuple[str | None, str | None]:
+    validate_voice_lang(settings, body.voice, body.lang)
+    d = await get_defaults(session, settings)
+    voice, lang = body.voice or d["voice"], body.lang or d["lang"]
+    # un préréglage devenu invalide (config modifiée) ne doit pas bloquer l'envoi
+    if voice not in settings.announce_voices:
+        voice = None
+    if lang not in settings.announce_langs:
+        lang = None
+    return voice, lang
+
+
+async def _text_of(session: AsyncSession, body: AnnouncementIn) -> str:
+    if body.preset_id is not None:
+        preset = await session.get(Preset, body.preset_id)
+        if preset is None or not preset.is_active:
+            raise HTTPException(404, "preset not found")
+        return preset.text
+    return (body.text or "").strip()
+
+
+async def _resolve_speakers(
+    session: AsyncSession, body: AnnouncementIn, *, skip_inactive: bool = False
+) -> tuple[list[Speaker], list[Speaker]]:
+    """(enceintes retenues, inactives ignorées). Sans `skip_inactive`, une inactive donne 409."""
+    ids = list(dict.fromkeys(body.speaker_ids))
+    found = (await session.scalars(select(Speaker).where(Speaker.id.in_(ids)))).all()
+    by_id = {s.id: s for s in found}
+    if len(by_id) != len(ids):
+        raise HTTPException(404, "speaker not found")
+    ignored = [s for s in found if not s.is_active]
+    if ignored and not skip_inactive:
+        raise HTTPException(409, "speaker inactive")
+    from_groups: list[Speaker] = []
+    for gid in dict.fromkeys(body.group_ids):
+        try:
+            from_groups += await groups.resolve_group(session, gid)
+        except HTTPException as exc:
+            if not (skip_inactive and exc.status_code == 409):
+                raise
+    chosen = groups.dedupe([by_id[i] for i in ids if by_id[i].is_active] + from_groups)
+    return chosen, ignored
 
 
 @announcements_router.post("", status_code=202)
@@ -336,28 +399,13 @@ async def create_announcement(
 ) -> dict[str, Any]:
     if not settings.ha_configured:
         raise HTTPException(503, "home assistant not configured")
-    if body.preset_id is not None:
-        preset = await session.get(Preset, body.preset_id)
-        if preset is None or not preset.is_active:
-            raise HTTPException(404, "preset not found")
-        text = preset.text
-    else:
-        text = (body.text or "").strip()
+    voice, lang = await _voice_lang(session, settings, body)
+    text = await _text_of(session, body)
     if not text:
         raise HTTPException(422, "text must not be empty")
     if len(text) > settings.announcement_max_length:
         raise HTTPException(422, f"text too long (max {settings.announcement_max_length})")
-    ids = list(dict.fromkeys(body.speaker_ids))
-    found = (await session.scalars(select(Speaker).where(Speaker.id.in_(ids)))).all()
-    by_id = {s.id: s for s in found}
-    if len(by_id) != len(ids):
-        raise HTTPException(404, "speaker not found")
-    if not all(s.is_active for s in found):
-        raise HTTPException(409, "speaker inactive")
-    from_groups: list[Speaker] = []
-    for gid in dict.fromkeys(body.group_ids):
-        from_groups += await groups.resolve_group(session, gid)
-    speakers = groups.dedupe([*(by_id[i] for i in ids), *from_groups])
+    speakers, _ = await _resolve_speakers(session, body)
     ann = service.build_announcement(
         settings,
         text=text,
@@ -365,6 +413,8 @@ async def create_announcement(
         is_test=body.is_test,
         priority=service.priority_for(user),
         author=user,
+        voice=voice,
+        lang=lang,
     )
     try:
         await service.submit(session, redis, ann, request=request)
@@ -373,15 +423,99 @@ async def create_announcement(
     return _ann_out(ann)
 
 
+@announcements_router.post("/preview")
+async def preview_announcement(
+    body: AnnouncementIn,
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    _: User = Depends(staff_up),
+) -> dict[str, Any]:
+    """Aucun effet : ni écriture, ni audit, ni file."""
+    voice, lang = await _voice_lang(session, settings, body)
+    text = await _text_of(session, body)
+    if not text:
+        raise HTTPException(422, "text must not be empty")
+    speakers, ignored = await _resolve_speakers(session, body, skip_inactive=True)
+    final = service.final_text(settings, text, body.is_test)
+    seconds = max(1, round(len(final.split()) * 60 / max(1, settings.announce_wpm)))
+    warnings: list[str] = []
+    if len(text) > settings.announcement_max_length:
+        warnings.append(f"Texte trop long ({len(text)} / {settings.announcement_max_length})")
+    if not speakers:
+        warnings.append("Aucune enceinte active ciblée")
+    warnings += [
+        f"Enceinte « {s.name} » sans notify_service" for s in speakers if not s.notify_service
+    ]
+    if (voice or lang) and any(not s.notify_service for s in speakers):
+        warnings.append("Voix/langue ignorées sur les enceintes sans notify_service")
+    return {
+        "text": final,
+        "is_test": body.is_test,
+        "voice": voice,
+        "lang": lang,
+        "ssml": build_ssml(
+            text, voice, lang, prefix=settings.test_prefix if body.is_test else None
+        ),
+        "speakers": [
+            {"id": str(s.id), "name": s.name, "has_notify_service": bool(s.notify_service)}
+            for s in speakers
+        ],
+        "ignored": [{"id": str(s.id), "name": s.name} for s in ignored],
+        "estimated_seconds": seconds,
+        "warnings": warnings,
+    }
+
+
+@announcements_router.get("/defaults")
+async def read_defaults(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    _: User = Depends(staff_up),
+) -> dict[str, Any]:
+    return {
+        **await get_defaults(session, settings),
+        "voices": settings.announce_voices,
+        "langs": settings.announce_langs,
+    }
+
+
+@announcements_router.put("/defaults")
+async def update_defaults(
+    body: DefaultsIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    admin: User = Depends(admin_only),
+) -> dict[str, Any]:
+    voice, lang = validate_voice_lang(settings, body.voice, body.lang)
+    row = await session.get(AnnounceDefaults, 1)
+    if row is None:
+        row = AnnounceDefaults(id=1)
+        session.add(row)
+    row.voice, row.lang = voice, lang
+    audit.record(
+        session,
+        "announce_defaults_update",
+        request=request,
+        user_id=admin.id,
+        actor=admin.email,
+        detail={"voice": voice, "lang": lang},
+    )
+    return {"voice": voice, "lang": lang}
+
+
 @announcements_router.get("")
 async def list_announcements(
+    response: Response,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    filters: history.Filters = Depends(history.filters_dep),
     session: AsyncSession = Depends(get_session),
     _: User = Depends(staff_up),
 ) -> list[dict[str, Any]]:
-    q = select(Announcement).order_by(Announcement.created_at.desc()).limit(limit).offset(offset)
-    return [_ann_out(a) for a in (await session.scalars(q)).all()]
+    rows, total = await history.search(session, filters, limit=limit, offset=offset)
+    response.headers["X-Total-Count"] = str(total)
+    return [_ann_out(a) for a in rows]
 
 
 @announcements_router.get("/{announcement_id}")

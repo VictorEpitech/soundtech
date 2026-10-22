@@ -11,6 +11,7 @@ from app.auth import audit
 from app.config import Settings, get_settings
 from app.ha import queue
 from app.ha.client import HAClient, HAError
+from app.ha.ssml import build_ssml
 from app.ma import service as ma_service
 from app.ma.client import MAClient
 from app.models import Announcement, AnnouncementStatus, Priority, Role, Speaker, User
@@ -42,7 +43,12 @@ def build_announcement(
     is_test: bool,
     priority: Priority,
     author: User | None,
+    voice: str | None = None,
+    lang: str | None = None,
 ) -> Announcement:
+    """Voix/langue : jamais pour une alerte (voix par défaut de l'enceinte)."""
+    if priority == Priority.alert:
+        voice = lang = None
     return Announcement(
         id=uuid.uuid4(),
         author_id=author.id if author else None,
@@ -50,6 +56,9 @@ def build_announcement(
         text=final_text(settings, text, is_test),
         priority=int(priority),
         is_test=is_test,
+        voice=voice,
+        lang=lang,
+        ssml=build_ssml(text, voice, lang, prefix=settings.test_prefix if is_test else None),
         status=AnnouncementStatus.queued.value,
         targets=[
             {
@@ -123,7 +132,7 @@ async def process_one(
             else:
                 paused = await ma_service.duck(ma, players)
             notify = {t["entity_id"]: t.get("notify_service") for t in ann.targets}
-            outcome = await ha.speak_many(entities, ann.text, notify)
+            outcome = await ha.speak_many(entities, ann.text, notify, ann.ssml)
         except Exception as exc:  # défense : ne jamais laisser une annonce en `sending`
             log.exception("announcement %s crashed", raw)
             outcome = {e: HAError(f"internal error: {type(exc).__name__}") for e in entities}

@@ -1,0 +1,26 @@
+<div class="stack">
+  <h2 id="dt-title">Annonce</h2>
+  <p class="preview-text">{{ a.text }}</p>
+  <p class="muted small">
+    <span class="badge mono status-{{ a.status }}">{{ a.status }}</span>
+    {% if a.is_test %}<span class="badge mono">TEST</span>{% endif %}
+    {{ a.author_email or '' }}
+    {% if a.voice or a.lang %} · {{ a.voice or 'voix par défaut' }} / {{ a.lang or 'langue par défaut' }}{% endif %}
+  </p>
+  <ul class="small mono">
+    <li>Créée : {{ a.created_at or '—' }}</li>
+    <li>Démarrée : {{ a.started_at or '—' }}</li>
+    <li>Terminée : {{ a.finished_at or '—' }}</li>
+  </ul>
+  {% if global_error %}<p class="status-failed">{{ global_error }}</p>{% endif %}
+  <ul class="list">
+    {% for t in per_speaker %}
+    <li class="row between">
+      <span>{{ t.name }}</span>
+      {% if t.result is none %}<span class="badge mono">en attente</span>
+      {% elif t.result.ok %}<span class="badge mono status-done">ok</span>
+      {% else %}<span class="badge mono status-failed">{{ t.result.error or 'échec' }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>

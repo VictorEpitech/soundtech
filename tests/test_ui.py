@@ -132,7 +132,9 @@ async def test_announce_lists_active_only(client, make_user, login_as, db) -> No
     await login_as(await make_user(Role.staff))
     page = (await client.get("/announce")).text
     assert "UI-Active" in page and "UI-Preset" in page
-    assert "UI-Inactive" not in page and "UI-PresetOff" not in page
+    assert (
+        "<span>UI-Inactive</span>" not in page and "UI-PresetOff" not in page
+    )  # filtre historique : toutes
     assert 'name="is_test"' in page
 
 

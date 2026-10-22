@@ -109,24 +109,36 @@ class HAClient:
         if r.status_code >= 400:
             raise HARequestError(f"HA {r.status_code}: {r.text[:200]}")
 
-    async def speak(self, entity_id: str, text: str, notify_service: str | None = None) -> None:
+    async def speak(
+        self,
+        entity_id: str,
+        text: str,
+        notify_service: str | None = None,
+        ssml: str | None = None,
+    ) -> None:
         domain, service = notify_service.split(".", 1) if notify_service else (None, None)
-        await self.call_service(
-            domain or self.domain,
-            service or self.service,
-            self.payload(entity_id, text, notify_service),
-        )
+        domain, service = domain or self.domain, service or self.service
+        if ssml and domain == "notify":
+            try:
+                await self.call_service(
+                    domain, service, self.payload(entity_id, ssml, notify_service)
+                )
+                return
+            except HARequestError as exc:  # SSML refusé : une seule tentative en texte brut
+                log.warning("HA refused SSML for %s (%s), plain text fallback", entity_id, exc)
+        await self.call_service(domain, service, self.payload(entity_id, text, notify_service))
 
     async def speak_many(
         self,
         entity_ids: list[str],
         text: str,
         notify_services: dict[str, str | None] | None = None,
+        ssml: str | None = None,
     ) -> dict[str, HAError | None]:
         """Un appel par enceinte, en parallèle ; une erreur n'affecte pas les autres."""
         ns = notify_services or {}
         results = await asyncio.gather(
-            *(self.speak(e, text, ns.get(e)) for e in entity_ids), return_exceptions=True
+            *(self.speak(e, text, ns.get(e), ssml) for e in entity_ids), return_exceptions=True
         )
         out: dict[str, HAError | None] = {}
         for entity_id, res in zip(entity_ids, results, strict=True):

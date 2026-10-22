@@ -115,6 +115,8 @@ class Announcement(Base):
         CheckConstraint(
             "status IN ('queued', 'sending', 'done', 'failed')", name="ck_announcements_status"
         ),
+        Index("ix_announcements_status_created", "status", "created_at"),
+        Index("ix_announcements_author_email", "author_email"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -128,9 +130,23 @@ class Announcement(Base):
     status: Mapped[str] = mapped_column(String(16), default="queued", server_default="queued")
     targets: Mapped[list[dict[str, Any]]] = mapped_column(JSON().with_variant(JSONB, "postgresql"))
     results: Mapped[dict[str, Any] | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"))
+    voice: Mapped[str | None] = mapped_column(String(32))
+    lang: Mapped[str | None] = mapped_column(String(16))
+    ssml: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AnnounceDefaults(Base):
+    """Ligne unique (id = 1) : voix/langue par défaut des annonces, modifiable par l'admin."""
+
+    __tablename__ = "announce_defaults"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_announce_defaults_single"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    voice: Mapped[str | None] = mapped_column(String(32))
+    lang: Mapped[str | None] = mapped_column(String(16))
 
 
 class IncidentStatus(enum.StrEnum):

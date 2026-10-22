@@ -393,3 +393,8 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 details > summary { min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 details[open] > summary { margin-bottom: 12px; }
 .card-sub { margin-top: 16px; }
+
+.preview-dialog { width: min(94vw, 480px); }
+.preview-text { font-size: 1.125rem; margin: 0; overflow-wrap: anywhere; }
+#history .btn[disabled] { opacity: 0.4; }
+#hist-filters input, #hist-filters select { min-height: 44px; }

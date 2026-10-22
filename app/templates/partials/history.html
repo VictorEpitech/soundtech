@@ -1,16 +1,29 @@
+<div data-page="{{ page }}">
 {% if not rows %}
 <p class="muted">Aucune annonce.</p>
 {% else %}
-<ul class="list">
+<p class="muted small">{{ total }} annonce(s)</p>
+<div class="table-wrap">
+<table class="table">
+  <thead><tr><th>Date</th><th>Statut</th><th>Message</th><th>Auteur</th><th>Enceintes</th><th></th></tr></thead>
+  <tbody>
   {% for a in rows %}
-  <li>
-    <div class="row between">
-      <span class="badge mono status-{{ a.status }}">{{ a.status }}</span>
-      <span class="muted small mono">{{ a.created_at[:16] | replace('T', ' ') if a.created_at else '' }}</span>
-    </div>
-    <p>{% if a.is_test %}<span class="badge mono">TEST</span> {% endif %}{{ a.text }}</p>
-    <p class="muted small">{{ a.author_email or '' }} · {{ a.targets | length }} enceinte(s)</p>
-  </li>
+  <tr>
+    <td class="mono">{{ a.created_at[:16] | replace('T', ' ') if a.created_at else '' }}</td>
+    <td><span class="badge mono status-{{ a.status }}">{{ a.status }}</span>{% if a.is_test %} <span class="badge mono">TEST</span>{% endif %}</td>
+    <td>{{ a.text }}</td>
+    <td class="small">{{ a.author_email or '' }}</td>
+    <td>{{ a.targets | length }}</td>
+    <td><button class="btn btn-icon btn-text" type="button" title="Détail" aria-label="Détail" hx-get="/ui/announce/{{ a.id }}" hx-target="#detail-body" hx-swap="innerHTML"><span class="icon">info</span></button></td>
+  </tr>
   {% endfor %}
-</ul>
+  </tbody>
+</table>
+</div>
+<div class="row between">
+  <button class="btn btn-tonal" type="button" {% if page <= 1 %}disabled{% else %}hx-get="/ui/announce/history?page={{ page - 1 }}" hx-include="#hist-filters" hx-target="#history"{% endif %}><span class="icon">chevron_left</span>Précédent</button>
+  <span class="muted small">Page {{ page }} / {{ pages }}</span>
+  <button class="btn btn-tonal" type="button" {% if page >= pages %}disabled{% else %}hx-get="/ui/announce/history?page={{ page + 1 }}" hx-include="#hist-filters" hx-target="#history"{% endif %}>Suivant<span class="icon">chevron_right</span></button>
+</div>
 {% endif %}
+</div>

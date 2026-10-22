@@ -20,25 +20,85 @@
     <fieldset class="chips">
       <legend>Groupes d'enceintes</legend>
       {% for g in groups %}
-      <label class="chip"><input type="checkbox" name="group_ids" value="{{ g.id }}"><span>{{ g.name }} ({{ g.active_count }})</span></label>
+      <label class="chip"><input type="checkbox" name="group_ids" value="{{ g.id }}" data-members="{{ g.members | selectattr('is_active') | map(attribute='id') | join(',') }}"><span>{{ g.name }} ({{ g.active_count }})</span></label>
       {% endfor %}
     </fieldset>
     {% endif %}
     <fieldset class="chips">
       <legend>Enceintes</legend>
       {% for s in speakers %}
-      <label class="chip"><input type="checkbox" name="speaker_ids" value="{{ s.id }}"><span>{{ s.name }}</span></label>
+      <label class="chip"><input type="checkbox" name="speaker_ids" value="{{ s.id }}" data-speaker><span>{{ s.name }}</span></label>
       {% else %}
       <p class="muted">Aucune enceinte active. Un administrateur doit en déclarer.</p>
       {% endfor %}
     </fieldset>
+    <p class="muted" id="target-count" role="status" aria-live="polite">0 enceinte ciblée</p>
+    <div class="row">
+      <label class="field grow"><span>Voix</span>
+        <select name="voice" id="voice-select">
+          <option value="">Par défaut{% if defaults.voice %} ({{ defaults.voice }}){% endif %}</option>
+          {% for v in voices %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field grow"><span>Langue</span>
+        <select name="lang" id="lang-select">
+          <option value="">Par défaut{% if defaults.lang %} ({{ defaults.lang }}){% endif %}</option>
+          {% for l in langs %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
     <label class="check"><input type="checkbox" name="is_test" value="true"><span>Ceci est un test</span></label>
-    <button class="btn btn-filled" type="submit"><span class="icon">send</span>Envoyer</button>
+    <div class="row">
+      <button class="btn btn-tonal" type="button" id="preview-btn" disabled><span class="icon">visibility</span>Prévisualiser</button>
+      <button class="btn btn-filled" type="submit" id="send-btn" disabled><span class="icon">send</span>Envoyer</button>
+    </div>
   </form>
 </section>
-<section class="card">
-  <h2>Dernières annonces</h2>
-  <div id="history" hx-get="/ui/announce/history" hx-trigger="load, refresh, every 5s">
+
+<dialog id="preview-dialog" class="menu preview-dialog" aria-labelledby="pv-title">
+  <div class="stack">
+    <h2 id="pv-title">Prévisualisation</h2>
+    <p class="preview-text" id="pv-text"></p>
+    <p class="muted small" id="pv-meta"></p>
+    <p class="small" id="pv-speakers"></p>
+    <ul class="list" id="pv-warnings" hidden></ul>
+    <div class="row">
+      <button class="btn btn-text" type="button" id="pv-cancel">Fermer</button>
+      <button class="btn btn-filled" type="button" id="pv-send"><span class="icon">send</span>Envoyer</button>
+    </div>
   </div>
+</dialog>
+<section class="card">
+  <h2>Historique</h2>
+  <form id="hist-filters" class="stack" hx-get="/ui/announce/history" hx-target="#history" hx-trigger="change, submit, input from:#f-q delay:400ms, input from:#f-author delay:400ms" hx-swap="innerHTML">
+    <div class="row">
+      <label class="field"><span>Du</span><input type="date" name="date_from"></label>
+      <label class="field"><span>Au</span><input type="date" name="date_to"></label>
+      <label class="field"><span>Statut</span>
+        <select name="status"><option value="">Tous</option><option value="queued">queued</option><option value="sending">sending</option><option value="done">done</option><option value="failed">failed</option></select>
+      </label>
+      <label class="field"><span>Test</span>
+        <select name="is_test"><option value="">Tous</option><option value="true">Test</option><option value="false">Réel</option></select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="field grow"><span>Auteur</span><input type="search" id="f-author" name="author" maxlength="320" autocomplete="off"></label>
+      <label class="field grow"><span>Texte</span><input type="search" id="f-q" name="q" maxlength="200" autocomplete="off"></label>
+      <label class="field"><span>Enceinte</span>
+        <select name="speaker_id"><option value="">Toutes</option>{% for s in all_speakers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select>
+      </label>
+      <label class="field"><span>Groupe</span>
+        <select name="group_id"><option value="">Tous</option>{% for g in all_groups %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}</select>
+      </label>
+      <button class="btn btn-text" type="reset" id="hist-reset"><span class="icon">filter_alt_off</span>Réinitialiser</button>
+    </div>
+  </form>
+  <div id="history" hx-get="/ui/announce/history" hx-include="#hist-filters" hx-trigger="load, refresh, every 10s [document.querySelector('#history [data-page]') === null || document.querySelector('#history [data-page]').dataset.page === '1']"></div>
 </section>
+
+<dialog id="detail-dialog" class="menu preview-dialog" aria-labelledby="dt-title">
+  <div id="detail-body"></div>
+  <div class="row"><button class="btn btn-text" type="button" id="dt-close">Fermer</button></div>
+</dialog>
 {% endblock %}
+{% block scripts %}<script src="/static/announce.js" defer></script>{% endblock %}

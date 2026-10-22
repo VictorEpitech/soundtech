@@ -18,6 +18,7 @@ from app.alerts import templates_api as alert_templates_api
 from app.alerts.roster import RosterProvider
 from app.auth.deps import get_session
 from app.config import Settings, get_settings
+from app.ha import history as history_api
 from app.ha import router as ha_api
 from app.ma import router as ma_api
 from app.models import Announcement, Role, User
@@ -103,6 +104,7 @@ async def announce_page(
     request: Request,
     user: User = Depends(staff_page),
     session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     speakers = [s for s in await ha_api.list_speakers(session, user) if s["is_active"]]
     presets = [p for p in await ha_api.list_presets(session, user) if p["is_active"]]
@@ -115,6 +117,11 @@ async def announce_page(
         speakers=speakers,
         presets=presets,
         groups=grp,
+        voices=settings.announce_voices,
+        langs=settings.announce_langs,
+        defaults=await ha_api.get_defaults(session, settings),
+        all_groups=_group_rows(await groups_api.list_groups(session)),
+        all_speakers=await ha_api.list_speakers(session, user),
     )
 
 
@@ -163,8 +170,21 @@ async def alert_dashboard(
 
 
 @router.get("/admin")
-async def admin_home(request: Request, user: User = Depends(admin_page)) -> Response:
-    return render(request, "admin.html", user, active="admin")
+async def admin_home(
+    request: Request,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    return render(
+        request,
+        "admin.html",
+        user,
+        active="admin",
+        voices=settings.announce_voices,
+        langs=settings.announce_langs,
+        defaults=await ha_api.get_defaults(session, settings),
+    )
 
 
 # --- fragments HTMX ---------------------------------------------------------
@@ -234,11 +254,53 @@ async def queue_fragment(
 @router.get("/ui/announce/history")
 async def history_fragment(
     request: Request,
+    page: int = Query(default=1, ge=1, le=100000),
+    filters: history_api.Filters = Depends(history_api.filters_dep),
     user: User = Depends(staff_page),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    rows = await ha_api.list_announcements(limit=15, offset=0, session=session, _=user)
-    return render(request, "partials/history.html", user, rows=rows)
+    size = history_api.PAGE_SIZE
+    rows, total = await history_api.search(session, filters, limit=size, offset=(page - 1) * size)
+    pages = max(1, -(-total // size))
+    return render(
+        request,
+        "partials/history.html",
+        user,
+        rows=[ha_api._ann_out(a) for a in rows],
+        page=page,
+        pages=pages,
+        total=total,
+    )
+
+
+@router.get("/ui/announce/{announcement_id}")
+async def announcement_detail_fragment(
+    request: Request,
+    announcement_id: uuid.UUID,
+    user: User = Depends(staff_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    try:
+        a = await ha_api.get_announcement(announcement_id, session, user)
+    except HTTPException as e:
+        return _fragment_error(request, e)
+    results = a["results"] or {}
+    per_speaker = [
+        {
+            "name": t.get("name") or t.get("entity_id"),
+            "entity_id": t.get("entity_id"),
+            "result": results.get(t.get("entity_id")),
+        }
+        for t in a["targets"]
+    ]
+    return render(
+        request,
+        "partials/announce_detail.html",
+        user,
+        a=a,
+        per_speaker=per_speaker,
+        global_error=results.get("_error"),
+    )
 
 
 @router.get("/ui/admin/users")
