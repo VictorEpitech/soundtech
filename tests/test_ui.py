@@ -263,3 +263,19 @@ async def test_lot678_contracts(client, make_user, login_as, db, fake_ma) -> Non
     more = (await client.get("/")).text
     assert 'class="more-alert"' in more and "data-more-close" in more
     assert "Nouvelle enceinte" in (await client.get("/admin/enceintes")).text
+
+
+async def test_admin_speakers_page_ui(client, make_user, login_as) -> None:
+    await login_as(await make_user(Role.admin))
+    r = await client.post(
+        "/speakers", json={"entity_id": "media_player.ui_grp", "name": "G", "group": "A"}
+    )
+    assert r.status_code == 201
+    sid = r.json()["id"]
+    page = (await client.get("/admin/enceintes")).text
+    assert '<details class="fold" id="ma-players-fold">' in page and 'id="ma-players"' in page
+    assert 'name="group"' not in page
+    frag = (await client.get("/ui/admin/speakers")).text
+    assert 'name="group"' not in frag and "Avancé (notify_service, ma_player_id)" in frag
+    r = await client.patch(f"/speakers/{sid}", json={"name": "G2"})
+    assert r.json()["group"] == "A"

@@ -158,6 +158,7 @@ class MAClient:
         return {
             "current_index": q.get("current_index"),
             "state": q.get("state"),
+            "elapsed_time": q.get("elapsed_time"),
             "items": items or [],
         }
 

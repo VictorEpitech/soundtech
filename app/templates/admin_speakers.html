@@ -7,7 +7,6 @@
   <form class="grid-form" hx-post="/speakers" hx-ext="json-typed" data-json data-toast="Enceinte créée" data-reset data-refresh="#speakers" hx-swap="none">
     <label class="field"><span>Entité HA</span><input class="mono" type="text" name="entity_id" required placeholder="media_player.salon" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
     <label class="field"><span>Nom</span><input type="text" name="name" required maxlength="255"></label>
-    <label class="field"><span>Groupe</span><input type="text" name="group" maxlength="100"></label>
     <label class="field"><span>notify_service</span><input class="mono" type="text" name="notify_service" placeholder="notify.alexa_media_salon" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
     <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" pattern="\S(.*\S)?"></label>
     <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Ajouter</button>
@@ -15,9 +14,10 @@
   </details>
   <label class="field"><span>Rechercher une enceinte</span><input type="search" data-filter-list="#speakers" autocomplete="off" aria-controls="speakers"></label>
   <div id="speakers" hx-get="/ui/admin/speakers" hx-trigger="load, refresh"></div>
-  <h3>Lecteurs Music Assistant détectés</h3>
+  <details class="fold" id="ma-players-fold"><summary>Lecteurs Music Assistant détectés</summary>
   <p class="muted small">Copiez l'ID dans le champ ma_player_id d'une enceinte, ou rattachez-le directement avec « Utiliser ».</p>
   <div id="ma-players" hx-get="/ui/admin/ma-players" hx-trigger="load, refresh from:#speakers"></div>
+  </details>
 </section>
 
 <section class="card">

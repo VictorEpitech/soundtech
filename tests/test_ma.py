@@ -52,6 +52,8 @@ class FakeMA:
         self.fail: set[str] = set()
         self.url = ""
         self.qstate: str | None = None
+        self.elapsed: float = 42.7
+        self.cur: int = 1
         self.items: list[dict[str, Any]] = QUEUE_ITEMS
         self.items_after_play: list[dict[str, Any]] | None = None
 
@@ -92,7 +94,14 @@ class FakeMA:
             elif cmd == "player_queues/get":
                 await ws.send(
                     json.dumps(
-                        {"message_id": mid, "result": {"current_index": 1, "state": self.qstate}}
+                        {
+                            "message_id": mid,
+                            "result": {
+                                "current_index": self.cur,
+                                "state": self.qstate,
+                                "elapsed_time": self.elapsed,
+                            },
+                        }
                     )
                 )
             elif cmd == "player_queues/items":
@@ -619,6 +628,7 @@ async def test_staff_delete_only_own(music_api, make_user, login_as, fake_ma, re
 
 async def _staff_delete_only_own(music_api, make_user, login_as, fake_ma) -> None:
     fake_ma.qstate = "playing"
+    fake_ma.cur = 0
     fake_ma.items = [QUEUE_ITEMS[0]]
     a, b = await make_user(Role.staff), await make_user(Role.staff)
     await login_as(a)

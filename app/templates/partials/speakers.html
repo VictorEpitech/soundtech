@@ -5,9 +5,8 @@
     <form class="grid-form" hx-patch="/speakers/{{ s.id }}" hx-swap="none" data-json data-refresh="#speakers" data-toast="Enceinte mise à jour">
       <p class="mono muted small span-all">{{ s.entity_id }}</p>
       <label class="field"><span>Nom</span><input type="text" name="name" value="{{ s.name }}" required maxlength="255"></label>
-      <details class="fold span-all"><summary>Avancé (groupe, notify_service, ma_player_id)</summary>
+      <details class="fold span-all"><summary>Avancé (notify_service, ma_player_id)</summary>
 <div class="grid-form">
-      <label class="field"><span>Groupe</span><input type="text" name="group" value="{{ s.group or '' }}" maxlength="100"></label>
       <label class="field"><span>notify_service</span><input class="mono" type="text" name="notify_service" value="{{ s.notify_service or '' }}" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
       <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" value="{{ s.ma_player_id or '' }}" pattern="\S(.*\S)?"></label>
 </div>

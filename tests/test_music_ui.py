@@ -128,10 +128,32 @@ async def test_queue_listing(staff) -> None:
     assert r.status_code == 200
     body = r.json()
     assert body["current_index"] == 1
-    a, b = body["items"]
-    assert (a["id"], a["artists"], a["duration"], a["current"]) == ("qa", ["A"], 61, False)
-    assert b["current"] is True and b["image"].startswith("/music/image?provider=plex")
+    (b,) = body["items"]  # l'élément passé (qa) n'est plus listé
+    assert (
+        b["id"] == "qb"
+        and b["current"] is True
+        and b["image"].startswith("/music/image?provider=plex")
+    )
+    assert body["elapsed"] == 42 and body["duration"] is not None
+    assert "state" in body
     assert TOKEN not in r.text
+
+
+async def test_queue_hides_finished(staff, fake_ma) -> None:
+    fake_ma.qstate = "idle"
+    fake_ma.elapsed = 120
+    body = (await staff.get("/music/players/p1/queue")).json()
+    assert body["items"] == []
+    r = await staff.get("/ui/music/queue", params={"player_id": "p1"})
+    assert "file d'attente est vide" in r.text.replace("&#39;", "'")
+    fake_ma.elapsed = 10  # idle mais pas terminé : reste affiché
+    assert len((await staff.get("/music/players/p1/queue")).json()["items"]) == 1
+
+
+async def test_queue_fragment_now_playing(staff) -> None:
+    r = await staff.get("/ui/music/queue", params={"player_id": "p1"})
+    assert 'role="progressbar"' in r.text and 'data-elapsed="42"' in r.text
+    assert 'id="now-playing"' in r.text
 
 
 async def test_queue_filtered_on_declared_players(staff, fake_ma) -> None:
@@ -149,7 +171,7 @@ async def test_queue_filtered_on_declared_players(staff, fake_ma) -> None:
 
 async def test_queue_ui_fragment(staff) -> None:
     r = await staff.get("/ui/music/queue", params={"player_id": "p1"})
-    assert "Deux" in r.text and "is-current" in r.text and "1:01" in r.text
+    assert "Deux" in r.text and "is-current" in r.text and "2:00" in r.text
     r = await staff.get("/ui/music/queue", params={"player_id": "p3"})
     assert "Deux" not in r.text and "player not declared" in r.text
 

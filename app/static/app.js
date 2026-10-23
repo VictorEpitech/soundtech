@@ -369,6 +369,33 @@
     restoreSel();
     document.dispatchEvent(new CustomEvent("selection-changed"));
   });
+  function fmtTime(s) {
+    s = Math.max(0, Math.floor(s));
+    return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2);
+  }
+  var npBase = null;
+  function npRender() {
+    var np = document.getElementById("now-playing");
+    if (!np) return;
+    var el = parseInt(np.dataset.elapsed, 10) || 0;
+    var dur = parseInt(np.dataset.duration, 10) || 0;
+    if (np.dataset.state === "playing" && npBase) el += Math.floor((Date.now() - npBase) / 1000);
+    if (dur) el = Math.min(el, dur);
+    var e = np.querySelector(".np-elapsed");
+    if (e) e.textContent = fmtTime(el);
+    if (!dur) return;
+    var bar = np.querySelector(".np-bar");
+    if (bar) bar.setAttribute("aria-valuenow", el);
+    var fill = np.querySelector(".np-fill");
+    if (fill) fill.style.width = Math.floor((el * 100) / dur) + "%";
+    var left = np.querySelector(".np-left");
+    if (left) left.textContent = "-" + fmtTime(dur - el);
+  }
+  document.body.addEventListener("htmx:afterSettle", function (e) {
+    if (e.target && e.target.id === "queue") { npBase = Date.now(); npRender(); }
+  });
+  setInterval(function () { if (!document.hidden) npRender(); }, 1000);
+
   document.body.addEventListener("htmx:afterSwap", function (e) {
     if (e.target.id === "players") {
       restoreSel();

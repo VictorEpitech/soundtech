@@ -5,6 +5,27 @@
 {% else %}
 {% set is_admin = user and user.role == 'admin' %}
 {% set base = '/music/players/' ~ player_id ~ '/queue' %}
+{% set np = (queue['items'] | selectattr('current') | list | first) if queue['items'] | selectattr('current') | list else none %}
+{% if np %}
+{% set dur = queue.duration or 0 %}
+{% set el = queue.elapsed or 0 %}
+{% set el = [el, dur] | min if dur else el %}
+<div class="now-playing" id="now-playing" data-state="{{ queue.state or '' }}" data-elapsed="{{ el }}" data-duration="{{ dur }}">
+  <img class="cover" src="{{ np.image or '/static/cover.svg' }}" alt="" width="64" height="64">
+  <div class="np-body">
+    <strong>{{ np.name }}</strong>
+    <span class="muted small">{{ (np.artists or []) | join(', ') }}</span>
+    <span class="badge mono np-state"><span class="icon icon-sm" aria-hidden="true">{{ 'play_arrow' if queue.state == 'playing' else 'pause' }}</span> {{ 'Lecture' if queue.state == 'playing' else 'Pause' }}</span>
+    {% if dur %}
+    <div class="np-bar" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="{{ dur }}" aria-valuenow="{{ el }}"><span class="np-fill" style="width: {{ el * 100 // dur }}%"></span></div>
+    {% endif %}
+    <div class="row between mono small">
+      <span class="np-elapsed">{{ '%d:%02d' | format(el // 60, el % 60) }}</span>
+      {% if dur %}<span class="np-total">{{ '%d:%02d' | format(dur // 60, dur % 60) }}</span><span class="np-left muted">-{{ '%d:%02d' | format((dur - el) // 60, (dur - el) % 60) }}</span>{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
 <div class="row between">
   <span class="muted small">{{ queue['items'] | length }} élément(s)</span>
   {% if is_admin %}<button class="btn btn-text btn-danger" type="button" hx-post="{{ base }}/clear" hx-swap="none" hx-confirm="Vider la file d'attente ?" data-confirm-label="Vider" data-refresh="#queue"><span class="icon" aria-hidden="true">delete_sweep</span>Vider</button>{% endif %}
