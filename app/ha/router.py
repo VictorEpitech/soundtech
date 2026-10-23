@@ -14,7 +14,7 @@ from app.auth import audit
 from app.auth.deps import get_session, require_role
 from app.config import Settings, get_settings
 from app.ha import history, service
-from app.ha.ssml import build_ssml, validate_voice_lang
+from app.ha.ssml import STYLES, build_ssml, validate_style, validate_voice_lang
 from app.models import AnnounceDefaults, Announcement, Preset, Role, Speaker, User
 from app.ratelimit import per_user
 
@@ -306,6 +306,7 @@ class AnnouncementIn(BaseModel):
     is_test: bool = False
     voice: str | None = Field(default=None, max_length=32)
     lang: str | None = Field(default=None, max_length=16)
+    style: str | None = Field(default=None, max_length=16)
     force_volume: bool | None = None  # None = réglage de config ; False = ne pas forcer
 
     @model_validator(mode="after")
@@ -331,6 +332,7 @@ def _ann_out(a: Announcement) -> dict[str, Any]:
         "is_test": a.is_test,
         "voice": a.voice,
         "lang": a.lang,
+        "style": a.style,
         "status": a.status,
         "targets": a.targets,
         "results": a.results,
@@ -359,6 +361,10 @@ async def _voice_lang(
     if lang not in settings.announce_langs:
         lang = None
     return voice, lang
+
+
+def _style(body: AnnouncementIn) -> str | None:
+    return validate_style(body.style) or None
 
 
 async def _text_of(session: AsyncSession, body: AnnouncementIn) -> str:
@@ -405,6 +411,7 @@ async def create_announcement(
     if not settings.ha_configured:
         raise HTTPException(503, "home assistant not configured")
     voice, lang = await _voice_lang(session, settings, body)
+    style = _style(body)
     text = await _text_of(session, body)
     if not text:
         raise HTTPException(422, "text must not be empty")
@@ -420,6 +427,7 @@ async def create_announcement(
         author=user,
         voice=voice,
         lang=lang,
+        style=style,
         force_volume=body.force_volume,
     )
     try:
@@ -438,6 +446,7 @@ async def preview_announcement(
 ) -> dict[str, Any]:
     """Aucun effet : ni écriture, ni audit, ni file."""
     voice, lang = await _voice_lang(session, settings, body)
+    style = _style(body)
     text = await _text_of(session, body)
     if not text:
         raise HTTPException(422, "text must not be empty")
@@ -452,15 +461,21 @@ async def preview_announcement(
     warnings += [
         f"Enceinte « {s.name} » sans notify_service" for s in speakers if not s.notify_service
     ]
-    if (voice or lang) and any(not s.notify_service for s in speakers):
-        warnings.append("Voix/langue ignorées sur les enceintes sans notify_service")
+    if (voice or lang or style) and any(not s.notify_service for s in speakers):
+        warnings.append("Voix/langue/style ignorés sur les enceintes sans notify_service")
     return {
         "text": final,
         "is_test": body.is_test,
         "voice": voice,
         "lang": lang,
+        "style": style,
+        "style_label": STYLES.get(style) if style else None,
         "ssml": build_ssml(
-            text, voice, lang, prefix=settings.test_prefix if body.is_test else None
+            text,
+            voice,
+            lang,
+            prefix=settings.test_prefix if body.is_test else None,
+            style=style,
         ),
         "speakers": [
             {"id": str(s.id), "name": s.name, "has_notify_service": bool(s.notify_service)}

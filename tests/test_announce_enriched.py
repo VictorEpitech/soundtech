@@ -311,3 +311,70 @@ async def test_ui_pages(ha_api, make_user, login_as, db) -> None:
     assert "interrompue" in (await ha_api.get(f"/ui/announce/{a2.id}")).text
     assert (await ha_api.get("/ui/announce/history", params={"status": "zz"})).status_code == 422
     assert (await ha_api.get("/admin/annonces")).text.count("Voix des annonces") == 1
+
+
+# --- style de diction -------------------------------------------------------
+
+_STYLE_SSML = {
+    "whisper": ('<amazon:effect name="whispered">', "</amazon:effect>"),
+    "slow": ('<prosody rate="slow">', "</prosody>"),
+    "fast": ('<prosody rate="fast">', "</prosody>"),
+    "soft": ('<prosody volume="soft">', "</prosody>"),
+    "loud": ('<prosody volume="loud">', "</prosody>"),
+    "low": ('<prosody pitch="low">', "</prosody>"),
+    "high": ('<prosody pitch="high">', "</prosody>"),
+    "emphasis": ('<emphasis level="strong">', "</emphasis>"),
+}
+
+
+def test_style_ssml_nesting_and_escape() -> None:
+    from app.ha.ssml import STYLES
+
+    assert set(STYLES) == set(_STYLE_SSML)
+    for key, (o, c) in _STYLE_SSML.items():
+        assert build_ssml("a<b", None, None, style=key) == f"<speak>{o}a&lt;b{c}</speak>"
+    out = build_ssml("x", "Celine", "fr-FR", prefix="TEST", style="slow")
+    assert out == (
+        '<speak>TEST <voice name="Celine"><lang xml:lang="fr-FR">'
+        '<prosody rate="slow">x</prosody></lang></voice></speak>'
+    )
+    assert build_ssml("x", None, None) is None
+
+
+def test_style_validation_and_alert() -> None:
+    from app.ha.ssml import validate_style
+
+    assert validate_style(None) is None and validate_style("fast") == "fast"
+    with pytest.raises(HTTPException) as ei:
+        validate_style("shout")
+    assert ei.value.status_code == 422
+    a = service.build_announcement(
+        Settings(),
+        text="Feu",
+        speakers=[],
+        is_test=False,
+        priority=Priority.alert,
+        author=None,
+        style="loud",
+    )
+    assert a.style is None and a.ssml is None
+
+
+async def test_style_api_preview_send_history(ha_api, make_user, login_as, db, redis) -> None:
+    await login_as(await make_user(Role.admin))
+    sid = await _speaker(ha_api, _eid(), notify_service="notify.alexa_media_a")
+    base = {"text": "Bonjour", "speaker_ids": [sid]}
+    for url in ("/announcements", "/announcements/preview"):
+        r = await ha_api.post(url, json={**base, "style": "shout"})
+        assert r.status_code == 422
+    p = (await ha_api.post("/announcements/preview", json={**base, "style": "whisper"})).json()
+    assert p["style"] == "whisper" and p["style_label"] == "Chuchoté"
+    assert p["ssml"] == '<speak><amazon:effect name="whispered">Bonjour</amazon:effect></speak>'
+    r = await ha_api.post("/announcements", json={**base, "style": "whisper"})
+    assert r.status_code == 202 and r.json()["style"] == "whisper"
+    ha, calls = mock_ha()
+    assert await service.process_one(db, redis, ha) is True
+    assert "whispered" in calls[0][2]["message"]
+    async with db() as s:
+        row = (await s.scalars(select(Announcement))).all()[-1]
+    assert row.style == "whisper"

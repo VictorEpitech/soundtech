@@ -133,6 +133,7 @@ class Announcement(Base):
     results: Mapped[dict[str, Any] | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"))
     voice: Mapped[str | None] = mapped_column(String(32))
     lang: Mapped[str | None] = mapped_column(String(16))
+    style: Mapped[str | None] = mapped_column(String(16))
     ssml: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

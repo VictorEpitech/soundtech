@@ -59,12 +59,13 @@ def build_announcement(
     author: User | None,
     voice: str | None = None,
     lang: str | None = None,
+    style: str | None = None,
     force_volume: bool | None = None,
 ) -> Announcement:
-    """Voix/langue : jamais pour une alerte (voix par défaut de l'enceinte)."""
+    """Voix/langue/style : jamais pour une alerte (voix par défaut de l'enceinte)."""
     level = volume_level(settings, priority, force_volume)
     if priority == Priority.alert:
-        voice = lang = None
+        voice = lang = style = None
     return Announcement(
         id=uuid.uuid4(),
         author_id=author.id if author else None,
@@ -74,7 +75,10 @@ def build_announcement(
         is_test=is_test,
         voice=voice,
         lang=lang,
-        ssml=build_ssml(text, voice, lang, prefix=settings.test_prefix if is_test else None),
+        style=style,
+        ssml=build_ssml(
+            text, voice, lang, prefix=settings.test_prefix if is_test else None, style=style
+        ),
         status=AnnouncementStatus.queued.value,
         targets=[
             {

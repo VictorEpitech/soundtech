@@ -10,6 +10,35 @@ from app.config import Settings
 _XML_INVALID = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
 
 
+STYLES: dict[str, str] = {
+    "whisper": "Chuchoté",
+    "slow": "Lent",
+    "fast": "Rapide",
+    "soft": "Doux",
+    "loud": "Fort",
+    "low": "Grave",
+    "high": "Aigu",
+    "emphasis": "Appuyé",
+}
+
+_STYLE_TAGS: dict[str, tuple[str, str]] = {
+    "whisper": ('<amazon:effect name="whispered">', "</amazon:effect>"),
+    "slow": ('<prosody rate="slow">', "</prosody>"),
+    "fast": ('<prosody rate="fast">', "</prosody>"),
+    "soft": ('<prosody volume="soft">', "</prosody>"),
+    "loud": ('<prosody volume="loud">', "</prosody>"),
+    "low": ('<prosody pitch="low">', "</prosody>"),
+    "high": ('<prosody pitch="high">', "</prosody>"),
+    "emphasis": ('<emphasis level="strong">', "</emphasis>"),
+}
+
+
+def validate_style(style: str | None) -> str | None:
+    if style is not None and style not in STYLES:
+        raise HTTPException(422, f"style not allowed: {style[:16]!r}")
+    return style
+
+
 def validate_voice_lang(
     settings: Settings, voice: str | None, lang: str | None
 ) -> tuple[str | None, str | None]:
@@ -25,12 +54,20 @@ def _text(s: str) -> str:
 
 
 def build_ssml(
-    text: str, voice: str | None, lang: str | None, *, prefix: str | None = None
+    text: str,
+    voice: str | None,
+    lang: str | None,
+    *,
+    prefix: str | None = None,
+    style: str | None = None,
 ) -> str | None:
-    """None si ni voix ni langue. Le préfixe (TEST) reste hors de `<voice>`/`<lang>`."""
-    if not voice and not lang:
+    """None si ni voix, ni langue, ni style. Le préfixe (TEST) reste hors de tout habillage."""
+    if not voice and not lang and not style:
         return None
     inner = _text(text)
+    if style:
+        open_, close = _STYLE_TAGS[style]
+        inner = f"{open_}{inner}{close}"
     if lang:
         inner = f"<lang xml:lang={quoteattr(lang)}>{inner}</lang>"
     if voice:

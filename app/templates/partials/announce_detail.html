@@ -7,6 +7,7 @@
     {% if a.is_test %}<span class="badge mono">TEST</span>{% endif %}
     {{ a.author_email or '' }}
     {% if a.voice or a.lang %} · {{ a.voice or 'voix par défaut' }} / {{ a.lang or 'langue par défaut' }}{% endif %}
+    {% if a.style %} · Diction : {{ styles.get(a.style, a.style) }}{% endif %}
   </p>
   <ul class="small mono">
     <li>Créée : {{ a.created_at or '—' }}</li>

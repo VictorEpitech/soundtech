@@ -82,6 +82,7 @@
       is_test: fd.get("is_test") === "true",
       voice: fd.get("voice") || null,
       lang: fd.get("lang") || null,
+      style: fd.get("style") || null,
     };
     if (form.elements.force_volume) o.force_volume = fd.get("force_volume") === "true";
     if (mode === "preset") o.preset_id = fd.get("preset_id");
@@ -118,6 +119,7 @@
     document.getElementById("pv-text").textContent = p.text;
     document.getElementById("pv-meta").textContent =
       "Voix : " + (p.voice || "par défaut") + " · Langue : " + (p.lang || "par défaut") +
+      " · Diction : " + (p.style_label || "normale") +
       " · Durée estimée : ~" + p.estimated_seconds + " s" +
       (p.volume ? " · Volume forcé : " + p.volume + " %" : "");
     var names = p.speakers.map(function (s) { return s.name; });

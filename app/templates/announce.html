@@ -42,7 +42,7 @@
     </fieldset>
     </details>
     <p class="muted" id="target-count" role="status" aria-live="polite">0 enceinte ciblée</p>
-    <details class="fold"><summary>Options (voix, langue, volume, test)</summary>
+    <details class="fold"><summary>Options (voix, langue, diction, volume, test)</summary>
     <div class="row">
       <label class="field grow"><span>Voix</span>
         <select name="voice" id="voice-select">
@@ -54,6 +54,12 @@
         <select name="lang" id="lang-select">
           <option value="">Par défaut{% if defaults.lang %} ({{ defaults.lang }}){% endif %}</option>
           {% for l in langs %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field grow"><span>Diction</span>
+        <select name="style" id="style-select">
+          <option value="">Normale</option>
+          {% for k, label in styles.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}
         </select>
       </label>
     </div>

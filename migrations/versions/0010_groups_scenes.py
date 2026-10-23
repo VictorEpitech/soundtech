@@ -58,7 +58,9 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "volume IS NULL OR (volume >= 0 AND volume <= 100)", name="ck_scenes_volume"
         ),
-        sa.CheckConstraint("repeat IS NULL OR repeat IN ('off', 'one', 'all')", name="ck_scenes_repeat"),
+        sa.CheckConstraint(
+            "repeat IS NULL OR repeat IN ('off', 'one', 'all')", name="ck_scenes_repeat"
+        ),
     )
     op.create_table(
         "scene_speakers",

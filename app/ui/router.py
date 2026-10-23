@@ -25,6 +25,7 @@ from app.config import Settings, get_settings
 from app.ha import history as history_api
 from app.ha import router as ha_api
 from app.ha import service as ha_service
+from app.ha.ssml import STYLES
 from app.ma import router as ma_api
 from app.models import (
     Announcement,
@@ -143,6 +144,7 @@ async def announce_page(
         groups=grp,
         voices=settings.announce_voices,
         langs=settings.announce_langs,
+        styles=STYLES,
         volume_level=ha_service.volume_level(settings, Priority.staff),
         defaults=await ha_api.get_defaults(session, settings),
         all_groups=_group_rows(await groups_api.list_groups(session)),
@@ -424,6 +426,7 @@ async def announcement_detail_fragment(
         "partials/announce_detail.html",
         user,
         a=a,
+        styles=STYLES,
         per_speaker=per_speaker,
         global_error=results.get("_error"),
     )
