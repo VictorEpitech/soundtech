@@ -51,7 +51,9 @@ class SpeakerIn(BaseModel):
     is_active: bool = True
     group: str | None = Field(default=None, max_length=100)
     notify_service: str | None = Field(default=None, max_length=255, pattern=NOTIFY_SERVICE_PATTERN)
-    ma_player_id: str | None = Field(default=None, min_length=1, max_length=255, pattern=r"^\S+$")
+    ma_player_id: str | None = Field(
+        default=None, min_length=1, max_length=255, pattern=r"^\S(.*\S)?$"
+    )
 
     _name = field_validator("name")(_clean)
 
@@ -61,7 +63,9 @@ class SpeakerPatch(BaseModel):
     is_active: bool | None = None
     group: str | None = Field(default=None, max_length=100)
     notify_service: str | None = Field(default=None, max_length=255, pattern=NOTIFY_SERVICE_PATTERN)
-    ma_player_id: str | None = Field(default=None, min_length=1, max_length=255, pattern=r"^\S+$")
+    ma_player_id: str | None = Field(
+        default=None, min_length=1, max_length=255, pattern=r"^\S(.*\S)?$"
+    )
 
     @field_validator("name")
     @classmethod

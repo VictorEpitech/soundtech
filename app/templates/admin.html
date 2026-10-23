@@ -24,7 +24,7 @@
     <label class="field"><span>Nom</span><input type="text" name="name" required maxlength="255"></label>
     <label class="field"><span>Groupe</span><input type="text" name="group" maxlength="100"></label>
     <label class="field"><span>notify_service</span><input class="mono" type="text" name="notify_service" placeholder="notify.alexa_media_salon" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
-    <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" pattern="\S+"></label>
+    <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" pattern="\S(.*\S)?"></label>
     <button class="btn btn-filled" type="submit"><span class="icon">add</span>Ajouter</button>
   </form>
   <div id="speakers" hx-get="/ui/admin/speakers" hx-trigger="load, refresh"></div>

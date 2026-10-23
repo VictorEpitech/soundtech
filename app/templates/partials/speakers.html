@@ -6,7 +6,7 @@
       <label class="field"><span>Nom</span><input type="text" name="name" value="{{ s.name }}" required maxlength="255"></label>
       <label class="field"><span>Groupe</span><input type="text" name="group" value="{{ s.group or '' }}" maxlength="100"></label>
       <label class="field"><span>notify_service</span><input class="mono" type="text" name="notify_service" value="{{ s.notify_service or '' }}" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
-      <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" value="{{ s.ma_player_id or '' }}" pattern="\S+"></label>
+      <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" value="{{ s.ma_player_id or '' }}" pattern="\S(.*\S)?"></label>
       <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
     </form>
     <div class="row">
