@@ -346,6 +346,40 @@ async def speakers_fragment(
     return render(request, "partials/speakers.html", user, rows=rows)
 
 
+@router.get("/ui/admin/ma-players")
+async def ma_players_fragment(
+    request: Request,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    speakers = await ha_api.list_speakers(session, user)
+    players: list[dict[str, Any]] = []
+    error: str | None = None
+    if not settings.ma_configured:
+        error = "Music Assistant n'est pas configuré."
+    else:
+        try:
+            players = await ma_api.available_players(user, ma_api.get_ma(settings), session)
+        except HTTPException as e:
+            error = f"Music Assistant indisponible ({e.detail})."
+    known = {p["player_id"] for p in players}
+    orphans = (
+        [s for s in speakers if s["ma_player_id"] and s["ma_player_id"] not in known]
+        if not error
+        else []
+    )
+    return render(
+        request,
+        "partials/ma_players.html",
+        user,
+        players=players,
+        speakers=speakers,
+        orphans=orphans,
+        error=error,
+    )
+
+
 @router.get("/ui/admin/presets")
 async def presets_fragment(
     request: Request,

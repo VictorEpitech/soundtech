@@ -130,6 +130,34 @@ async def list_players(
     ]
 
 
+@router.get("/players/available")
+async def available_players(
+    _: User = Depends(require_role(Role.admin)),
+    ma: MAClient = Depends(get_ma),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, Any]]:
+    """Tous les lecteurs MA, avec l'enceinte qui utilise déjà chaque ID (aide à la saisie)."""
+    rows = await session.execute(
+        select(Speaker.ma_player_id, Speaker.name)
+        .where(Speaker.ma_player_id.is_not(None))
+        .order_by(Speaker.name)
+    )
+    used: dict[str, str] = {}
+    for pid, name in rows:
+        used.setdefault(pid, name)
+    return [
+        {
+            "player_id": p.get("player_id"),
+            "name": p.get("display_name") or p.get("name") or p.get("player_id"),
+            "provider": p.get("provider"),
+            "available": bool(p.get("available", True)),
+            "declared_as": used.get(p.get("player_id")),
+        }
+        for p in await _run(ma.players())
+        if p.get("player_id")
+    ]
+
+
 @router.get("/search")
 async def search(
     q: str = Query(min_length=1, max_length=200),

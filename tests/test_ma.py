@@ -8,6 +8,7 @@ import pytest_asyncio
 import websockets
 from httpx import AsyncClient
 from pydantic import SecretStr
+from sqlalchemy import delete
 
 from app.config import Settings, get_settings
 from app.ha import service
@@ -457,3 +458,43 @@ async def test_resume_only_if_was_playing(fake_ma: FakeMA) -> None:
     await ma_service.resume(_client(fake_ma), paused)
     assert not any(c.startswith("player_queues/p") for c, _ in fake_ma.cmds if c.endswith("play"))
     assert "player_queues/play" not in [c for c, _ in fake_ma.cmds]
+
+
+# --- lecteurs disponibles (admin) --------------------------------------------
+
+
+async def test_available_players_admin(music_api, make_user, login_as, fake_ma) -> None:
+    await login_as(await make_user(Role.staff))
+    assert (await music_api.get("/music/players/available")).status_code == 403
+    await login_as(await make_user(Role.admin))
+    r = await music_api.get("/music/players/available")
+    assert r.status_code == 200
+    by_id = {p["player_id"]: p for p in r.json()}
+    assert set(by_id) == {"p1", "p2"}
+    assert by_id["p1"]["declared_as"] == "Grande salle"
+    assert by_id["p2"]["declared_as"] == "Off"
+    assert by_id["p1"]["name"] == "Salon" and by_id["p1"]["available"] is True
+    assert TOKEN not in r.text
+
+
+async def test_available_players_errors(client, make_user, login_as, declared) -> None:
+    await login_as(await make_user(Role.admin))
+    app.dependency_overrides[get_settings] = lambda: _settings().model_copy(
+        update={"ma_url": "http://127.0.0.1:1", "ma_timeout": 1.0}
+    )
+    assert (await client.get("/music/players/available")).status_code == 503
+
+
+async def test_admin_ma_players_fragment(music_api, make_user, login_as, db) -> None:
+    async with db() as s:
+        s.add(Speaker(entity_id=_eid(), name="Orpheline", ma_player_id="zzz"))
+        await s.commit()
+    await login_as(await make_user(Role.admin))
+    r = await music_api.get("/ui/admin/ma-players")
+    assert r.status_code == 200
+    assert "Salon" in r.text and "p1" in r.text and "Utiliser" in r.text
+    assert "Orpheline" in r.text and "aucun lecteur" in r.text
+    assert TOKEN not in r.text
+    async with db() as s:
+        await s.execute(delete(Speaker).where(Speaker.ma_player_id == "zzz"))
+        await s.commit()

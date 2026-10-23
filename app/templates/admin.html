@@ -28,6 +28,9 @@
     <button class="btn btn-filled" type="submit"><span class="icon">add</span>Ajouter</button>
   </form>
   <div id="speakers" hx-get="/ui/admin/speakers" hx-trigger="load, refresh"></div>
+  <h3>Lecteurs Music Assistant détectés</h3>
+  <p class="muted small">Copiez l'ID dans le champ ma_player_id d'une enceinte, ou rattachez-le directement avec « Utiliser ».</p>
+  <div id="ma-players" hx-get="/ui/admin/ma-players" hx-trigger="load, refresh from:#speakers"></div>
 </section>
 
 <section class="card">

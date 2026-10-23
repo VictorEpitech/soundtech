@@ -95,6 +95,30 @@
     }
   });
 
+  // Admin → Enceintes : copie d'un ID de lecteur MA et rattachement à une enceinte.
+  document.addEventListener("click", function (e) {
+    var copy = e.target.closest("[data-copy]");
+    if (copy) {
+      var done = function () { toast("ID copié"); };
+      if (navigator.clipboard) navigator.clipboard.writeText(copy.dataset.copy).then(done, function () { toast("Copie impossible", true); });
+      else toast("Copie impossible", true);
+      return;
+    }
+    var use = e.target.closest("[data-use-player]");
+    if (!use) return;
+    var box = use.closest("[data-ma-use]");
+    var sel = box.querySelector("select");
+    fetch("/speakers/" + encodeURIComponent(sel.value), {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ma_player_id: box.dataset.playerId }),
+    }).then(function (r) {
+      if (r.ok) { toast("Enceinte mise à jour"); refresh("#speakers"); return; }
+      return r.text().then(function (t) { toast(errorText({ status: r.status, responseText: t }), true); });
+    }, function () { toast("Erreur réseau", true); });
+  });
+
   // Rafraîchit la liste des incidents sans écraser un champ de confirmation en cours de saisie.
   setInterval(function () {
     var list = document.getElementById("incidents");
