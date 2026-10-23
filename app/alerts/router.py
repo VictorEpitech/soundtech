@@ -10,14 +10,23 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.alerts import autoremind, report_pdf, responses, service
+from app.alerts import autoremind, links, report_pdf, responses, service, webhook
 from app.alerts.roster import RosterProvider, get_roster_provider
 from app.alerts.teams import IncidentNotice, TeamsError, TeamsNotifier, get_notifier
 from app.auth import audit
 from app.auth.deps import get_session, require_role
 from app.config import Settings, get_settings
 from app.ha.router import get_redis
-from app.models import AlertTemplate, Announcement, AuditLog, Incident, IncidentType, Role, User
+from app.models import (
+    AlertTemplate,
+    Announcement,
+    AuditLog,
+    Incident,
+    IncidentType,
+    Role,
+    Student,
+    User,
+)
 
 staff_up = require_role(Role.admin, Role.staff)
 admin_only = require_role(Role.admin)
@@ -29,6 +38,10 @@ router = APIRouter(prefix="/incidents", tags=["incidents"])
 
 def get_teams_notifier(settings: Settings = Depends(get_settings)) -> TeamsNotifier:
     return get_notifier(settings)
+
+
+def get_webhook(settings: Settings = Depends(get_settings)) -> webhook.WebhookClient:
+    return webhook.get_webhook(settings)
 
 
 def get_roster(settings: Settings = Depends(get_settings)) -> RosterProvider:
@@ -497,6 +510,7 @@ async def remind(
     settings: Settings = Depends(get_settings),
     notifier: TeamsNotifier = Depends(get_teams_notifier),
     roster: RosterProvider = Depends(get_roster),
+    wh: webhook.WebhookClient = Depends(get_webhook),
     user: User = Depends(staff_up),
 ) -> dict[str, Any]:
     await _rate_limit(redis, settings, user, "remind")
@@ -522,7 +536,10 @@ async def remind(
         raise HTTPException(429, "reminder already sent recently")
     notice = IncidentNotice(str(incident.id), incident.title, incident.message, incident.is_test)
     try:
-        detail = await notifier.remind(notice, missing)
+        if settings.links_active:  # nouveaux liens individuels aux seuls non-répondants
+            detail = await webhook.remind(session, settings, wh, notice, missing)
+        else:
+            detail = await notifier.remind(notice, missing)
     except TeamsError as e:
         try:
             await redis.delete(key)
@@ -600,3 +617,39 @@ async def stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class LinkIn(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+@router.post("/{incident_id}/links")
+async def create_student_link(
+    incident_id: uuid.UUID,
+    body: LinkIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+    settings: Settings = Depends(get_settings),
+    admin: User = Depends(admin_only),
+) -> dict[str, Any]:
+    """Génère un nouveau lien pour un étudiant (test / dépannage). Le jeton n'est montré qu'ici."""
+    await _rate_limit(redis, settings, admin, "link")
+    incident = await _get(session, incident_id)
+    if incident.status != "sent":
+        raise HTTPException(409, "incident is not sent")
+    student = await session.scalar(
+        select(Student).where(Student.email == body.email.strip().lower())
+    )
+    if student is None:
+        raise HTTPException(404, "student not found")
+    issued = (await links.create_links(session, settings, incident_id, [student]))[0]
+    audit.record(
+        session,
+        "response_link_create",
+        request=request,
+        user_id=admin.id,
+        actor=admin.email,
+        detail={"incident_id": str(incident_id), "student_id": str(student.id)},
+    )
+    return {"url": issued.url, "expires_in_hours": settings.response_link_ttl_hours}

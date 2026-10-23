@@ -6,7 +6,7 @@
 <h1>{{ incident.title }}</h1>
 <div class="actionbar" role="toolbar" aria-label="Actions sur l'incident">
       {% if incident.status == 'sent' %}
-      <button class="btn btn-filled" type="button" hx-post="/incidents/{{ incident.id }}/remind" hx-confirm="Relancer les non-répondants sur Teams ?" data-confirm-label="Relancer" hx-swap="none" data-toast="Relance envoyée" data-refresh="#responses"><span class="icon" aria-hidden="true">notifications_active</span>Relancer les non-répondants</button>
+      <button class="btn btn-filled" type="button" hx-post="/incidents/{{ incident.id }}/remind" hx-confirm="Relancer les non-répondants ?" data-confirm-label="Relancer" hx-swap="none" data-toast="Relance envoyée" data-refresh="#responses"><span class="icon" aria-hidden="true">notifications_active</span>Relancer les non-répondants</button>
       {% endif %}
     {% if incident.status in ('sent', 'failed') %}
     <button class="btn btn-tonal" type="button" hx-post="/incidents/{{ incident.id }}/close" hx-confirm="Clore cet incident ?" data-confirm-label="Clore" hx-swap="none" data-toast="Incident clos" data-reload><span class="icon" aria-hidden="true">check_circle</span>Clore l'incident</button>
@@ -48,6 +48,20 @@
   <p class="muted">Aucune diffusion enregistrée.</p>
   {% endif %}
 </section>
+{% if link_info %}
+<section class="card" id="response-links">
+  <h2>Liens de réponse individuels</h2>
+  <p>Canal webhook : <strong>{{ link_info.channel }}</strong> — liens créés : <strong class="mono">{{ link_info.count }}</strong> (validité {{ link_info.ttl }} h)</p>
+  {% if link_info.last %}<p class="muted small">Dernier envoi : {{ link_info.last.sent }} / {{ link_info.last.recipients }} destinataire(s){% if link_info.last.failed %}, <span class="status-failed">{{ link_info.last.failed }} en échec</span>{% endif %}.</p>{% endif %}
+  {% if user.role == 'admin' and incident.status == 'sent' %}
+  <form class="row" hx-post="/ui/alerts/{{ incident.id }}/links" hx-target="#student-link" hx-swap="innerHTML">
+    <label class="field grow"><span>Courriel de l'étudiant (lien de test)</span><input type="email" name="email" required autocomplete="off"></label>
+    <button class="btn btn-tonal" type="submit"><span class="icon" aria-hidden="true">link</span>Générer un lien</button>
+  </form>
+  <div id="student-link" role="status"></div>
+  {% endif %}
+</section>
+{% endif %}
 <section class="card">
   <div class="row between">
     <h2>Réponses</h2>

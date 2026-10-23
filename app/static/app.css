@@ -578,3 +578,10 @@ dialog.menu::backdrop { background: rgb(15 23 42 / 0.55); backdrop-filter: blur(
 .media-list .media-text strong, .media-list .media-sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .media-list .media-more { flex: none; margin-left: auto; padding: 8px; color: var(--on-surface-variant); }
 .player > *, .player-ctl { min-width: 0; } .player-ctl .slider { min-width: 0; width: 100%; }
+
+/* Page publique de réponse par lien (/r/<jeton>) : mobile-first, aucune navigation */
+.reply-body { padding-bottom: calc(var(--safe-b) + 16px); }
+.reply { max-width: 560px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; align-content: start; }
+.reply .card { margin: 0; }
+.reply-btn { width: 100%; min-height: 72px; font-size: 1.125rem; border-radius: var(--r-lg); padding: 12px 20px; text-align: left; justify-content: flex-start; }
+.reply-saved { display: flex; align-items: center; gap: 8px; margin: 0; }

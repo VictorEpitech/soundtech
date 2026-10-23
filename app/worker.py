@@ -6,7 +6,7 @@ from arq import cron
 from arq.connections import RedisSettings
 from redis.asyncio import Redis
 
-from app.alerts import autoremind, responses, watch
+from app.alerts import autoremind, responses, watch, webhook
 from app.alerts.roster import get_roster_provider
 from app.alerts.teams import get_notifier
 from app.auth import audit
@@ -35,6 +35,7 @@ async def startup(ctx: dict[str, Any]) -> None:
     ctx["ma"] = MAClient.from_settings(settings) if settings.ma_configured else None
     ctx["roster"] = get_roster_provider(settings)
     ctx["teams"] = get_notifier(settings)
+    ctx["webhook"] = webhook.get_webhook(settings)
     ctx["ma_monitor"] = (
         asyncio.create_task(monitor.run(ctx["ma"])) if ctx["ma"] is not None else None
     )
@@ -94,13 +95,30 @@ async def auto_remind(ctx: dict[str, Any]) -> int:
     """Relances automatiques des non-répondants ; isolé : n'affecte jamais les autres tâches."""
     try:
         n = await autoremind.tick(
-            SessionLocal, ctx["redis"], get_settings(), ctx["roster"], ctx["teams"]
+            SessionLocal,
+            ctx["redis"],
+            get_settings(),
+            ctx["roster"],
+            ctx["teams"],
+            wh=ctx["webhook"],
         )
     except Exception:
         log.exception("relances automatiques en échec")
         return 0
     if n:
         log.info("relances automatiques : %d envoyée(s)", n)
+    return n
+
+
+async def dispatch_webhook(ctx: dict[str, Any]) -> int:
+    """Liens de réponse par webhook ; isolé et indépendant du TTS (file et priorités inchangées)."""
+    try:
+        n = await webhook.tick(SessionLocal, get_settings(), ctx["webhook"])
+    except Exception:
+        log.exception("diffusion webhook en échec")
+        return 0
+    if n:
+        log.info("diffusion webhook : %d incident(s) traité(s)", n)
     return n
 
 
@@ -122,6 +140,7 @@ class WorkerSettings:
         cron(drain_announcements, second=set(range(60)), run_at_startup=True),
         cron(reap_volumes, second={0, 15, 30, 45}, run_at_startup=True),
         cron(run_schedules, second={5}, run_at_startup=True),
+        cron(dispatch_webhook, second=set(range(0, 60, 5)), run_at_startup=True, timeout=900),
         cron(auto_remind, second={10}),
         cron(notify_staff, second={25}),
         cron(purge_responses, hour={3}, minute={15}),

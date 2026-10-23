@@ -92,6 +92,28 @@ Le bot doit être installé pour pouvoir écrire aux étudiants.
 2. Inscription `Sound Bot` (ou `Sound`) → **Autorisations de l'API → Ajouter → Microsoft Graph → Autorisations de l'application** → `GroupMember.Read.All` → **Accorder le consentement administrateur** (demande à la DSI si tu n'as pas le rôle).
 3. Update the stack. Sans cette permission, le dashboard n'affiche pas les non-répondants et l'export CSV renvoie une erreur 502 (volontaire).
 
+## 4bis. Sans bot: Power Automate
+Alternative sans Azure Bot ni Graph (aucune permission DSI) : chaque étudiant reçoit en message Teams une carte avec 3 boutons qui ouvrent sa page personnelle `https://<DOMAIN>/r/<jeton>` (sans connexion). Le bot Teams reste utilisable en parallèle, mais le suivi des réponses et des non-répondants se fait alors sur l'annuaire étudiants (import CSV), pas sur le groupe Entra.
+
+**Principe.** À l'envoi d'une alerte, le worker crée un lien unique par étudiant (jeton aléatoire de 256 bits ; seul son hash est stocké ; validité `RESPONSE_LINK_TTL_HOURS`, 48 h par défaut ; page fermée dès que l'incident est clos) puis POSTe par lots de 50 vers ton flow. Le TTS n'attend jamais ce canal. Les relances (manuelles ou automatiques, mêmes cooldown et plafond) ne ciblent que les non-répondants, avec de nouveaux liens.
+
+**Flow Power Automate** (flow créé par toi, propriétaire = compte de service) :
+1. Déclencheur **When a Teams webhook request is received** (« Quand une requête de webhook Teams est reçue »), accès : *Tout le monde* si la DSI l'autorise, sinon *Utilisateurs de mon organisation* avec une URL signée. Copie l'URL HTTP POST dans `ALERT_WEBHOOK_URL` (secret Portainer, jamais dans le dépôt).
+2. **Parse JSON** sur `triggerBody()` avec ce schéma : objet `{kind, batch, batches, incident{id,title,message,type,is_test}, recipients[]{email,first_name,last_name,url,card}}` (`card` en type *object*).
+3. **Apply to each** sur `recipients`, **concurrence 20** (Paramètres → Contrôle de concurrence).
+4. Dans la boucle : **Post card in a chat or channel** — *Post as* : **Flow bot**, *Post in* : **Chat with Flow bot**, *Recipient* : `items('Apply_to_each')?['email']`, *Adaptive Card* : `string(items('Apply_to_each')?['card'])`.
+5. Réponse : le trigger répond 200 immédiatement ; Sound réessaie (3 tentatives, backoff) sur 408/429/5xx et abandonne sur 4xx.
+
+**Choix de conception.** Une carte *par destinataire* (champ `recipients[].card`, Adaptive Card 1.4, 3 `Action.OpenUrl`), car l'URL est personnelle ; chaque carte reste sous 24 Ko (limite Teams : 28 Ko). Le champ `kind` vaut `alert` ou `reminder` (carte préfixée « RAPPEL »).
+
+**Configuration.** `ALERT_WEBHOOK_URL` (vide = mode journal, rien n'est envoyé), `ALERT_WEBHOOK_ENABLED=false` pour couper le canal sans effacer l'URL, `RESPONSE_LINKS=true` pour utiliser les liens sans webhook (copie manuelle depuis le tableau de bord, bouton « Générer un lien »). Renseigne ces variables sur l'API **et** le worker (déjà câblé dans `docker-compose.yml`).
+
+**Points d'attention.**
+- La page `/r/<jeton>` doit être joignable depuis Internet/les téléphones des étudiants (reverse proxy). Elle est en `noindex`, sans cache ; pense à exclure `/r/` des logs d'accès de ton proxy (les logs de Sound masquent déjà le jeton).
+- Limite de débit : `RL_RESPONSE_LINK_LIMIT` par IP et par minute (600 par défaut, car un campus partage souvent une IP). Baisse-la si besoin.
+- Un envoi partiel (lot en échec après 3 tentatives) n'est pas rejoué automatiquement pour éviter les doublons : utilise « Relancer les non-répondants ». Si aucun lot ne part, l'envoi est retenté (3 fois).
+- Non vérifié en conditions réelles : format exact attendu par ton flow (schéma Parse JSON ci-dessus), affichage des boutons `Action.OpenUrl` dans Teams mobile, quotas Power Automate (limites de débit du connecteur Teams).
+
 ## 5. Test en mode TEST (avant tout usage réel)
 Suis la checklist de `docs/runbook.md` : annonce test, alerte test, réponse depuis Teams, dashboard, export CSV, relance. Commence avec **un seul compte de test** dans le groupe roster.
 Points à surveiller lors du premier test réel, non vérifiés en conditions réelles :

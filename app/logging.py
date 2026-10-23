@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import sys
 from datetime import UTC, datetime
 
@@ -25,6 +26,23 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str, ensure_ascii=False)
 
 
+_LINK_TOKEN = re.compile(r"/r/[A-Za-z0-9_-]{20,}")
+
+
+class RedactLinkToken(logging.Filter):
+    """Les jetons de réponse circulent dans l'URL : jamais dans les logs d'accès."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                _LINK_TOKEN.sub("/r/[redacted]", a) if isinstance(a, str) else a
+                for a in record.args
+            )
+        if isinstance(record.msg, str):
+            record.msg = _LINK_TOKEN.sub("/r/[redacted]", record.msg)
+        return True
+
+
 def setup_logging(level: str = "INFO", service: str = "sound") -> None:
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter(service))
@@ -35,3 +53,4 @@ def setup_logging(level: str = "INFO", service: str = "sound") -> None:
         lg = logging.getLogger(name)
         lg.handlers.clear()
         lg.propagate = True
+        lg.addFilter(RedactLinkToken())

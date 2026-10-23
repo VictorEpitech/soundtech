@@ -17,6 +17,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.alerts import responses
+from app.alerts import webhook as webhook_mod
 from app.alerts.roster import RosterProvider
 from app.alerts.teams import IncidentNotice, TeamsNotifier
 from app.auth import audit
@@ -91,6 +92,7 @@ async def _process(
     notifier: TeamsNotifier,
     incident_id: uuid.UUID,
     now: datetime,
+    wh: webhook_mod.WebhookClient | None = None,
 ) -> bool:
     lock = f"autoremind:lock:{incident_id}"
     try:
@@ -138,10 +140,18 @@ async def _process(
             notice = IncidentNotice(str(inc.id), inc.title, inc.message, inc.is_test)
             batches = max(1, math.ceil(len(missing) / 20))
             try:
-                await asyncio.wait_for(
-                    notifier.remind(notice, missing),
-                    timeout=settings.teams_timeout * batches + 10,
-                )
+                if settings.links_active:  # mode liens : nouveaux liens, pas de mentions Teams
+                    await asyncio.wait_for(
+                        webhook_mod.remind(
+                            s, settings, wh or webhook_mod.get_webhook(settings), notice, missing
+                        ),
+                        timeout=webhook_mod.remind_timeout(settings, len(missing)),
+                    )
+                else:
+                    await asyncio.wait_for(
+                        notifier.remind(notice, missing),
+                        timeout=settings.teams_timeout * batches + 10,
+                    )
             except Exception as exc:
                 posted = list(getattr(exc, "mentioned_ids", []) or [])
                 log.warning(
@@ -206,6 +216,7 @@ async def tick(
     roster: RosterProvider,
     notifier: TeamsNotifier,
     now: datetime | None = None,
+    wh: webhook_mod.WebhookClient | None = None,
 ) -> int:
     """Relance les incidents échus ; renvoie le nombre de relances envoyées."""
     now = now or datetime.now(UTC)
@@ -219,7 +230,7 @@ async def tick(
     sent = 0
     for iid in due:
         try:
-            if await _process(sm, redis, settings, roster, notifier, iid, now):
+            if await _process(sm, redis, settings, roster, notifier, iid, now, wh):
                 sent += 1
         except Exception:
             log.exception("auto remind %s crashed", iid)

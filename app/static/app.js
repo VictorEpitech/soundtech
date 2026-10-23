@@ -242,7 +242,7 @@
   document.addEventListener("click", function (e) {
     var copy = e.target.closest("[data-copy]");
     if (copy) {
-      var done = function () { toast("ID copié"); };
+      var done = function () { toast(copy.dataset.copyToast || "ID copié"); };
       if (navigator.clipboard) navigator.clipboard.writeText(copy.dataset.copy).then(done, function () { toast("Copie impossible", true); });
       else toast("Copie impossible", true);
       return;

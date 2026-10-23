@@ -79,6 +79,17 @@ class Settings(BaseSettings):
     teams_conversation_id: str = ""
     teams_timeout: float = 10.0
 
+    # Liens de réponse individuels (sans bot) et diffusion par webhook (Power Automate)
+    response_links: bool = False  # force le mode liens même sans webhook (liens copiés à la main)
+    response_link_ttl_hours: int = Field(default=48, ge=1, le=24 * 30)
+    alert_webhook_url: SecretStr = SecretStr("")  # secret : l'URL contient la signature du flow
+    alert_webhook_enabled: bool = True
+    alert_webhook_batch: int = Field(default=50, ge=1, le=200)
+    alert_webhook_timeout: float = Field(default=15.0, ge=1, le=120)
+    alert_webhook_retries: int = Field(default=3, ge=1, le=6)
+    alert_webhook_card_max_bytes: int = Field(default=24_000, ge=2_000, le=28_000)
+    rl_response_link_limit: int = 600  # par IP et par fenêtre : un campus partage souvent une IP
+
     roster_group_id: str = ""
     roster_timeout: float = 15.0
     roster_cache_ttl: int = 120
@@ -119,6 +130,15 @@ class Settings(BaseSettings):
             and self.teams_service_url
             and self.teams_conversation_id
         )
+
+    @property
+    def webhook_configured(self) -> bool:
+        return bool(self.alert_webhook_enabled and self.alert_webhook_url.get_secret_value())
+
+    @property
+    def links_active(self) -> bool:
+        """Mode liens : les répondants attendus viennent de l'annuaire `students`."""
+        return self.response_links or self.webhook_configured
 
     @property
     def push_configured(self) -> bool:

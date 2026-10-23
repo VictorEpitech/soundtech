@@ -6,8 +6,12 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings
+from app.db import SessionLocal
+from app.models import Student
 
 log = logging.getLogger("sound.alerts.roster")
 
@@ -110,5 +114,37 @@ class GraphRoster:
         return members
 
 
+class StudentRoster:
+    """Mode liens : les personnes attendues sont les étudiants de l'annuaire (`students`).
+
+    `aad_id` = `str(Student.id)`, l'identifiant porté par `Response.user_aad_id` pour les
+    réponses par lien. Ouvre sa propre session (le roster est injecté hors requête, ex. worker).
+    """
+
+    configured = True
+
+    def __init__(self, sm: async_sessionmaker[AsyncSession] | None = None) -> None:
+        self._sm = sm
+
+    async def members(self) -> list[Member]:
+        sm = self._sm or SessionLocal
+        try:
+            async with sm() as s:
+                rows = (await s.scalars(select(Student))).all()
+        except Exception as exc:
+            raise RosterError(f"students error: {type(exc).__name__}") from None
+        members = [
+            Member(
+                str(st.id),
+                st.email,
+                f"{st.first_name} {st.last_name}".strip() or st.email,
+            )
+            for st in rows
+        ]
+        return sorted(members, key=lambda m: m.name.lower())
+
+
 def get_roster_provider(settings: Settings) -> RosterProvider:
+    if settings.links_active:
+        return StudentRoster()
     return GraphRoster(settings) if settings.roster_group_id else LogRoster()

@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.admin import router as admin_router
 from app.alerts.bot import router as bot_router
+from app.alerts.public import router as public_reply_router
 from app.alerts.router import router as incidents_router
 from app.alerts.templates_api import router as alert_templates_router
 from app.auth.router import router as auth_router
@@ -60,6 +61,7 @@ app.include_router(schedules_router)
 app.include_router(closures_router)
 app.include_router(push_router)
 app.include_router(bot_router)
+app.include_router(public_reply_router)
 register_ui(app)
 
 

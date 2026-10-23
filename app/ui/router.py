@@ -3,12 +3,13 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,7 @@ from app import admin as users_api
 from app import groups as groups_api
 from app import scenes as scenes_api
 from app import students as students_api
+from app.alerts import links as links_svc
 from app.alerts import responses as responses_svc
 from app.alerts import router as alerts_api
 from app.alerts import templates_api as alert_templates_api
@@ -29,6 +31,7 @@ from app.ha.ssml import STYLES
 from app.ma import router as ma_api
 from app.models import (
     Announcement,
+    AuditLog,
     Incident,
     IncidentStatus,
     Priority,
@@ -180,6 +183,7 @@ async def alert_dashboard(
     incident_id: uuid.UUID,
     user: User = Depends(staff_page),
     session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     try:
         incident = await alerts_api.get_incident(incident_id, session, user)
@@ -191,8 +195,59 @@ async def alert_dashboard(
         else None
     )
     speakers = [t.get("name") or t.get("entity_id") for t in (ann.targets if ann else [])]
+    link_info = None
+    if settings.links_active:
+        last = await session.scalar(
+            select(AuditLog)
+            .where(
+                AuditLog.action == "webhook_dispatch",
+                AuditLog.detail["incident_id"].as_string() == str(incident_id),
+            )
+            .order_by(AuditLog.ts.desc())
+            .limit(1)
+        )
+        if not settings.alert_webhook_url.get_secret_value():
+            channel = "non configuré (mode journal)"
+        elif not settings.alert_webhook_enabled:
+            channel = "désactivé"
+        else:
+            channel = "actif"
+        link_info = {
+            "channel": channel,
+            "count": await links_svc.count_links(session, incident_id),
+            "last": last.detail if last else None,
+            "ttl": settings.response_link_ttl_hours,
+        }
     return render(
-        request, "dashboard.html", user, active="alerts", incident=incident, speakers=speakers
+        request,
+        "dashboard.html",
+        user,
+        active="alerts",
+        incident=incident,
+        speakers=speakers,
+        link_info=link_info,
+    )
+
+
+@router.post("/ui/alerts/{incident_id}/links")
+async def student_link_fragment(
+    request: Request,
+    incident_id: uuid.UUID,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(ha_api.get_redis),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    form = parse_qs((await request.body())[:4096].decode("utf-8", "replace"))
+    email = (form.get("email") or [""])[0]
+    try:
+        out = await alerts_api.create_student_link(
+            incident_id, alerts_api.LinkIn(email=email), request, session, redis, settings, user
+        )
+    except HTTPException as e:
+        return _fragment_error(request, e)
+    return render(
+        request, "partials/student_link.html", user, url=out["url"], ttl=out["expires_in_hours"]
     )
 
 
