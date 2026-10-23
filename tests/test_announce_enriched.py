@@ -247,7 +247,7 @@ async def test_history_filters_and_rights(ha_api, make_user, login_as, db) -> No
     await _seed(db, text=f"{tag} alpha", author=bob, targets=[t])
     await _seed(db, text=f"{tag} 100% sûr_", is_test=True, status="failed", author=al, targets=[o])
     await _seed(db, text=f"{tag} vieux", created_at=old, author=bob)
-    await login_as(await make_user(Role.staff))
+    await login_as(await make_user(Role.admin))
 
     async def texts(**p: Any) -> list[str]:
         r = await ha_api.get("/announcements", params={"q": tag, **p})

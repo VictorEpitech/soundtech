@@ -1,0 +1,34 @@
+{% from "_macros.html" import empty %}
+<div class="stack card-sub">
+  <p>
+    <strong>{{ plan.adds | length }}</strong> ajout{{ 's' if plan.adds | length > 1 }} ·
+    <strong>{{ plan.updates | length }}</strong> mise{{ 's' if plan.updates | length > 1 }} à jour ·
+    <span class="muted">{{ plan.unchanged }} inchangé{{ 's' if plan.unchanged > 1 }}</span> ·
+    <strong class="{{ 'status-failed' if plan.parsed.errors }}">{{ plan.parsed.errors | length }}</strong> ligne{{ 's' if plan.parsed.errors | length > 1 }} en erreur
+  </p>
+  {% if plan.parsed.errors %}
+  <details>
+    <summary>Lignes ignorées{% if plan.parsed.errors | length > errors | length %} (100 premières){% endif %}</summary>
+    <ul class="list">{% for e in errors %}<li>Ligne {{ e.line }} : {{ e.error }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+  <form class="stack" hx-post="/admin/students/import/apply" hx-ext="json-typed" data-json data-arrays="delete" hx-swap="none" data-toast="Import effectué" data-refresh="#students" hx-on::after-request="if (event.detail.successful) document.getElementById('student-preview').innerHTML = ''">
+    <textarea name="csv" hidden>{{ csv_text }}</textarea>
+    {% if plan.missing %}
+    <fieldset class="stack">
+      <legend>{{ plan.missing | length }} étudiant{{ 's' if plan.missing | length > 1 }} en base mais absent{{ 's' if plan.missing | length > 1 }} du fichier</legend>
+      <p class="muted small">Cochez ceux à supprimer. Décoché = conservé.</p>
+      <label class="check"><input type="checkbox" onchange="this.closest('fieldset').querySelectorAll('input[name=delete]').forEach(function (c) { c.checked = this.checked; }, this)"><span>Tout cocher</span></label>
+      <ul class="list">
+        {% for s in plan.missing %}
+        <li><label class="check"><input type="checkbox" name="delete" value="{{ s.email }}"><span><span class="mono">{{ s.email }}</span> <span class="muted small">{{ s.last_name }} {{ s.first_name }}{% if s.promo %} · {{ s.promo }}{% endif %}{% if s.cursus %} · {{ s.cursus }}{% endif %}</span></span></label></li>
+        {% endfor %}
+      </ul>
+    </fieldset>
+    {% endif %}
+    <div class="row">
+      <button class="btn btn-filled" type="submit" {% if not plan.adds and not plan.updates and not plan.missing %}disabled{% endif %}><span class="icon" aria-hidden="true">check</span>Valider l'import</button>
+      <button class="btn btn-text" type="button" onclick="document.getElementById('student-preview').innerHTML = ''">Annuler</button>
+    </div>
+  </form>
+</div>

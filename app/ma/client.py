@@ -155,7 +155,11 @@ class MAClient:
         async with self.session() as conn:
             q = await conn.call("player_queues/get", queue_id=queue_id) or {}
             items = await conn.call("player_queues/items", queue_id=queue_id, limit=limit, offset=0)
-        return {"current_index": q.get("current_index"), "items": items or []}
+        return {
+            "current_index": q.get("current_index"),
+            "state": q.get("state"),
+            "items": items or [],
+        }
 
     async def queue_delete(self, queue_id: str, item_id: str) -> None:
         await self.call("player_queues/delete_item", queue_id=queue_id, item_id_or_index=item_id)

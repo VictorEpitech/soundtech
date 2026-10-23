@@ -1,0 +1,59 @@
+{% from "_macros.html" import empty %}
+<p class="muted small">{{ total_all }} étudiant{{ 's' if total_all > 1 }} au total{% if total != total_all %} · {{ total }} correspondant{{ 's' if total > 1 }} au filtre{% endif %}</p>
+{% if by_promo or by_cursus %}
+<div class="chips" aria-label="Compteurs">
+  {% for p, n in by_promo %}<span class="badge mono">Promo {{ p }} : {{ n }}</span>{% endfor %}
+  {% for c, n in by_cursus %}<span class="badge mono">{{ c }} : {{ n }}</span>{% endfor %}
+</div>
+{% endif %}
+{% if rows %}
+<div class="table-wrap">
+<table class="table">
+  <thead><tr><th>Nom</th><th>Prénom</th><th>Email</th><th>Promo</th><th>Cursus</th></tr></thead>
+  <tbody>
+  {% for s in rows %}
+    <tr>
+      <td data-label="Nom"><strong>{{ s.last_name }}</strong></td>
+      <td data-label="Prénom">{{ s.first_name }}</td>
+      <td class="mono" data-label="Email">{{ s.email }}</td>
+      <td data-label="Promo">{{ s.promo }}</td>
+      <td data-label="Cursus">{{ s.cursus }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if pages > 1 %}
+<nav class="row between" aria-label="Pagination">
+  <button class="btn btn-text" type="button" {% if prev_url %}hx-get="{{ prev_url }}" hx-target="#students" hx-swap="innerHTML"{% else %}disabled{% endif %}><span class="icon" aria-hidden="true">chevron_left</span>Précédent</button>
+  <span class="muted small">Page {{ page }} / {{ pages }}</span>
+  <button class="btn btn-text" type="button" {% if next_url %}hx-get="{{ next_url }}" hx-target="#students" hx-swap="innerHTML"{% else %}disabled{% endif %}>Suivant<span class="icon" aria-hidden="true">chevron_right</span></button>
+</nav>
+{% endif %}
+{% else %}
+{{ empty('Aucun étudiant.', tag='p') }}
+{% endif %}
+
+{% if total_all %}
+<details class="card-sub">
+  <summary>Suppression en masse</summary>
+  <div class="stack">
+    {% for p, n in by_promo %}
+    <div class="row between wrap">
+      <span>Promo <strong>{{ p }}</strong> ({{ n }})</span>
+      <button class="btn btn-text btn-danger" type="button" hx-post="/admin/students/delete" hx-ext="json-typed" data-json hx-vals='{{ {"scope": "promo", "value": p} | tojson }}' hx-confirm="Supprimer les {{ n }} étudiant{{ 's' if n > 1 }} de la promo {{ p }} ? Action irréversible." data-confirm-label="Supprimer" hx-swap="none" data-toast="Promo supprimée" data-refresh="#students"><span class="icon" aria-hidden="true">delete</span>Supprimer la promo</button>
+    </div>
+    {% endfor %}
+    {% for c, n in by_cursus %}
+    <div class="row between wrap">
+      <span>Cursus <strong>{{ c }}</strong> ({{ n }})</span>
+      <button class="btn btn-text btn-danger" type="button" hx-post="/admin/students/delete" hx-ext="json-typed" data-json hx-vals='{{ {"scope": "cursus", "value": c} | tojson }}' hx-confirm="Supprimer les {{ n }} étudiant{{ 's' if n > 1 }} du cursus {{ c }} ? Action irréversible." data-confirm-label="Supprimer" hx-swap="none" data-toast="Cursus supprimé" data-refresh="#students"><span class="icon" aria-hidden="true">delete</span>Supprimer le cursus</button>
+    </div>
+    {% endfor %}
+    <form class="row" hx-post="/admin/students/delete" hx-ext="json-typed" data-json hx-vals='{"scope": "all"}' hx-confirm="Supprimer TOUS les {{ total_all }} étudiants ? Action irréversible." data-confirm-label="Tout supprimer" hx-swap="none" data-toast="Tous les étudiants supprimés" data-refresh="#students">
+      <label class="field grow"><span>Tout supprimer ({{ total_all }}) : tapez « {{ delete_word }} »</span><input type="text" name="confirm" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label>
+      <button class="btn btn-filled btn-danger" type="submit"><span class="icon" aria-hidden="true">delete_forever</span>Tout supprimer</button>
+    </form>
+  </div>
+</details>
+{% endif %}

@@ -51,6 +51,9 @@ class FakeMA:
         self.cmds: list[tuple[str, dict[str, Any]]] = []
         self.fail: set[str] = set()
         self.url = ""
+        self.qstate: str | None = None
+        self.items: list[dict[str, Any]] = QUEUE_ITEMS
+        self.items_after_play: list[dict[str, Any]] | None = None
 
     async def handler(self, ws: Any) -> None:
         await ws.send(json.dumps({"server_version": "2.10.7", "schema_version": 65}))
@@ -80,14 +83,20 @@ class FakeMA:
                 continue
             await ws.send(json.dumps({"event": "noise", "data": {}}))
             self.cmds.append((cmd, args))
+            if cmd == "player_queues/play_media" and self.items_after_play is not None:
+                self.items = self.items_after_play
             if cmd in self.fail:
                 await ws.send(json.dumps({"message_id": mid, "error_code": 999, "details": "no"}))
             elif cmd == "players/all":
                 await ws.send(json.dumps({"message_id": mid, "result": PLAYERS}))
             elif cmd == "player_queues/get":
-                await ws.send(json.dumps({"message_id": mid, "result": {"current_index": 1}}))
+                await ws.send(
+                    json.dumps(
+                        {"message_id": mid, "result": {"current_index": 1, "state": self.qstate}}
+                    )
+                )
             elif cmd == "player_queues/items":
-                await ws.send(json.dumps({"message_id": mid, "result": QUEUE_ITEMS}))
+                await ws.send(json.dumps({"message_id": mid, "result": self.items}))
             elif cmd == "music/search":
                 res = {
                     "tracks": [
@@ -220,7 +229,7 @@ async def test_music_student_refused(music_api, make_user) -> None:
 
 
 async def test_music_routes(music_api, make_user, login_as, fake_ma) -> None:
-    await login_as(await make_user(Role.staff))
+    await login_as(await make_user(Role.admin))
     r = await music_api.get("/music/players")
     assert [p["id"] for p in r.json()] == ["p1"]  # p2 inactive, non déclarés ignorés
     assert r.json()[0] == {
@@ -558,3 +567,75 @@ async def test_manual_stop_keeps_interrupted_item(fake_ma: FakeMA) -> None:
     await det.handle(_qev("m", "idle", repeat_mode="off"))  # Stop manuel au milieu de b
     dels = [a["item_id_or_index"] for c, a in fake_ma.cmds if c == "player_queues/delete_item"]
     assert dels == ["a"]  # b (interrompu) est conservé
+
+
+# --- rôle staff : ajout seul ----------------------------------------------------
+
+P = "/music/players/p1"
+
+
+def _cmds(fake: FakeMA, name: str) -> list[dict[str, Any]]:
+    return [a for c, a in fake.cmds if c == name]
+
+
+async def test_staff_add_starts_when_idle_or_empty(music_api, make_user, login_as, fake_ma) -> None:
+    await login_as(await make_user(Role.staff))
+    fake_ma.items = []
+    r = await music_api.post(f"{P}/play", json={"uri": "lib://t/1", "option": "add"})
+    assert r.status_code == 204
+    assert _cmds(fake_ma, "player_queues/play_media")[-1]["option"] == "play"
+    fake_ma.qstate = "playing"
+    fake_ma.items = QUEUE_ITEMS
+    await music_api.post(f"{P}/play", json={"uri": "lib://t/1", "option": "add"})
+    assert _cmds(fake_ma, "player_queues/play_media")[-1]["option"] == "add"
+
+
+async def test_staff_forbidden_actions(music_api, make_user, login_as, fake_ma) -> None:
+    await login_as(await make_user(Role.staff))
+    for opt in ("play", "next", "replace", None):
+        body = {"uri": "lib://t/1"} | ({"option": opt} if opt else {})
+        assert (await music_api.post(f"{P}/play", json=body)).status_code == 403
+    for path in ("queue/clear", "next", "previous", "queue/items/qa/play"):
+        assert (await music_api.post(f"{P}/{path}")).status_code == 403
+    r = await music_api.post(f"{P}/queue/items/qa/move", json={"shift": 1})
+    assert r.status_code == 403
+    assert not _cmds(fake_ma, "player_queues/clear")
+    assert not _cmds(fake_ma, "player_queues/delete_item")
+
+
+async def test_staff_delete_only_own(music_api, make_user, login_as, fake_ma, redis) -> None:  # noqa: F811
+    had = getattr(app.state, "redis", None)
+    app.state.redis = redis
+    try:
+        await _staff_delete_only_own(music_api, make_user, login_as, fake_ma)
+    finally:
+        if had is None:
+            del app.state.redis
+        else:
+            app.state.redis = had
+        for k in [*await redis.keys("rl:*"), *await redis.keys("ma:qowner:*")]:
+            await redis.delete(k)
+
+
+async def _staff_delete_only_own(music_api, make_user, login_as, fake_ma) -> None:
+    fake_ma.qstate = "playing"
+    fake_ma.items = [QUEUE_ITEMS[0]]
+    a, b = await make_user(Role.staff), await make_user(Role.staff)
+    await login_as(a)
+    await music_api.post(f"{P}/play", json={"uri": "lib://t/1", "option": "add"})
+    assert (await music_api.get(f"{P}/queue")).json()["items"][0]["mine"] is False  # pas tracé
+    fake_ma.items_after_play = QUEUE_ITEMS
+    await music_api.post(f"{P}/play", json={"uri": "lib://t/1", "option": "add"})
+    items = (await music_api.get(f"{P}/queue")).json()["items"]
+    assert [i["mine"] for i in items] == [False, True]
+    assert (await music_api.delete(f"{P}/queue/items/qa")).status_code == 403
+    assert (await music_api.delete(f"{P}/queue/items/qb")).status_code == 204
+    await login_as(b)
+    assert (await music_api.delete(f"{P}/queue/items/qb")).status_code == 403
+    await login_as(await make_user(Role.admin))
+    assert (await music_api.delete(f"{P}/queue/items/qa")).status_code == 204
+    assert all(i["mine"] for i in (await music_api.get(f"{P}/queue")).json()["items"])
+    for path in ("next", "queue/clear", "queue/items/qa/play"):
+        assert (await music_api.post(f"{P}/{path}")).status_code == 204
+    r = await music_api.post(f"{P}/play", json={"uri": "lib://t/1", "option": "next"})
+    assert r.status_code == 204

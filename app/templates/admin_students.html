@@ -1,0 +1,40 @@
+{% extends "admin_base.html" %}
+{% block title %}Étudiants{% endblock %}
+{% block admin_content %}
+<section class="card">
+  <h2>Importer un fichier CSV</h2>
+  <p class="muted small">UTF-8, séparateur « , » ou « ; ». Colonnes : email, nom, prenom, promo, cursus (en-têtes tolérants). Taille max {{ max_mb }} Mo. Rien n'est modifié avant la validation de l'aperçu.</p>
+  <form class="row" id="student-import" hx-post="/ui/admin/students/preview" hx-ext="json-typed" data-json hx-target="#student-preview" hx-swap="innerHTML">
+    <label class="field grow"><span>Fichier CSV</span><input type="file" id="student-file" accept=".csv,text/csv" required></label>
+    <input type="hidden" name="csv" id="student-csv">
+    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">upload_file</span>Aperçu</button>
+  </form>
+  <div id="student-preview" aria-live="polite"></div>
+</section>
+<section class="card">
+  <h2>Étudiants</h2>
+  <form class="row" id="student-filters" role="search" onsubmit="return false">
+    <label class="field grow"><span>Recherche</span><input type="search" name="q" maxlength="100" placeholder="Nom, prénom ou email"></label>
+    <label class="field"><span>Promo</span>
+      <select name="promo"><option value="">Toutes</option>{% for p in promos %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select>
+    </label>
+    <label class="field"><span>Cursus</span>
+      <select name="cursus"><option value="">Tous</option>{% for c in cursus_list %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select>
+    </label>
+  </form>
+  <div id="students" hx-get="/ui/admin/students" hx-include="#student-filters" hx-trigger="load, refresh, change from:#student-filters, input changed delay:300ms from:#student-filters"></div>
+</section>
+<script>
+  (function () {
+    var f = document.getElementById("student-file");
+    f.addEventListener("change", function () {
+      var file = f.files[0];
+      if (!file) return;
+      if (file.size > {{ max_mb * 1000000 }}) { f.value = ""; alert("Fichier trop volumineux (max {{ max_mb }} Mo)."); return; }
+      var r = new FileReader();
+      r.onload = function () { document.getElementById("student-csv").value = r.result; };
+      r.readAsText(file, "utf-8");
+    });
+  })();
+</script>
+{% endblock %}

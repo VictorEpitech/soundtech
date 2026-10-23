@@ -17,7 +17,7 @@
       <td data-label="Statut">{{ status_badge(i.status) }}</td>
       <td class="muted small" data-label="Auteur">{{ i.created_by_email or '' }}</td>
       <td class="mono" data-label="Réponses">{% if i.status in ('sent', 'closed') %}{{ i.responded }}{% if roster_total is not none %} / {{ roster_total }}{% endif %}{% else %}—{% endif %}</td>
-      <td><a class="btn btn-text" href="/alerts/{{ i.id }}"><span class="icon" aria-hidden="true">monitoring</span>Détails</a></td>
+      <td><a class="btn btn-text" href="/alerts/{{ i.id }}"><span class="icon" aria-hidden="true">monitoring</span>Détails</a>{% if user and user.role == 'admin' and i.status == 'closed' %} <button class="btn btn-icon btn-danger" type="button" hx-delete="/incidents/{{ i.id }}" hx-confirm="Supprimer cet incident et ses réponses ?" hx-swap="none" data-refresh="#incidents" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>{% endif %}</td>
     </tr>
   {% endfor %}
   </tbody>

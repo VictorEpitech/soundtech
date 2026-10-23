@@ -38,10 +38,10 @@
   {% endif %}
   <div id="group-bar" class="player-ctl group-bar" hidden>
     <span class="badge mono" id="sel-count">0</span>
-    <button class="btn btn-icon" type="button" data-group="previous" title="Précédent (sélection)" aria-label="Précédent (sélection)"><span class="icon" aria-hidden="true">skip_previous</span></button>
+    {% if user and user.role == 'admin' %}<button class="btn btn-icon" type="button" data-group="previous" title="Précédent (sélection)" aria-label="Précédent (sélection)"><span class="icon" aria-hidden="true">skip_previous</span></button>{% endif %}
     <button class="btn btn-icon btn-filled" type="button" data-group="resume" title="Lecture (sélection)" aria-label="Lecture (sélection)"><span class="icon" aria-hidden="true">play_arrow</span></button>
     <button class="btn btn-icon btn-filled" type="button" data-group="pause" title="Pause (sélection)" aria-label="Pause (sélection)"><span class="icon" aria-hidden="true">pause</span></button>
-    <button class="btn btn-icon" type="button" data-group="next" title="Suivant (sélection)" aria-label="Suivant (sélection)"><span class="icon" aria-hidden="true">skip_next</span></button>
+    {% if user and user.role == 'admin' %}<button class="btn btn-icon" type="button" data-group="next" title="Suivant (sélection)" aria-label="Suivant (sélection)"><span class="icon" aria-hidden="true">skip_next</span></button>{% endif %}
     <span class="icon vol" aria-hidden="true">volume_up</span>
     <input class="slider" type="range" id="group-volume" min="0" max="100" value="30" aria-label="Volume de la sélection">
   </div>
@@ -58,8 +58,8 @@
 </section>
 <dialog id="play-menu" class="menu" aria-labelledby="play-menu-title">
   <p class="mono" id="play-menu-title"></p>
-  <button class="btn btn-filled" type="button" data-opt="play"><span class="icon" aria-hidden="true">play_arrow</span>Lire maintenant</button>
-  <button class="btn btn-tonal" type="button" data-opt="next"><span class="icon" aria-hidden="true">playlist_play</span>Lire ensuite</button>
+  {% if user and user.role == 'admin' %}<button class="btn btn-filled" type="button" data-opt="play"><span class="icon" aria-hidden="true">play_arrow</span>Lire maintenant</button>
+  <button class="btn btn-tonal" type="button" data-opt="next"><span class="icon" aria-hidden="true">playlist_play</span>Lire ensuite</button>{% endif %}
   <button class="btn btn-tonal" type="button" data-opt="add"><span class="icon" aria-hidden="true">playlist_add</span>Ajouter à la file</button>
   <button class="btn btn-text" type="button" data-opt="">Annuler</button>
 </dialog>

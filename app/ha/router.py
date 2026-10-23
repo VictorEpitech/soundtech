@@ -519,9 +519,9 @@ async def list_announcements(
     offset: int = Query(0, ge=0),
     filters: history.Filters = Depends(history.filters_dep),
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(staff_up),
+    user: User = Depends(staff_up),
 ) -> list[dict[str, Any]]:
-    rows, total = await history.search(session, filters, limit=limit, offset=offset)
+    rows, total = await history.search(session, filters, limit=limit, offset=offset, viewer=user)
     response.headers["X-Total-Count"] = str(total)
     return [_ann_out(a) for a in rows]
 
@@ -530,9 +530,36 @@ async def list_announcements(
 async def get_announcement(
     announcement_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(staff_up),
+    user: User = Depends(staff_up),
 ) -> dict[str, Any]:
+    a = await session.get(Announcement, announcement_id)
+    if a is None or (user.role != Role.admin and a.author_id != user.id):
+        raise HTTPException(404, "announcement not found")
+    return _ann_out(a)
+
+
+@announcements_router.delete("/{announcement_id}", status_code=204)
+async def delete_announcement(
+    announcement_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(admin_only),
+) -> Response:
     a = await session.get(Announcement, announcement_id)
     if a is None:
         raise HTTPException(404, "announcement not found")
-    return _ann_out(a)
+    audit.record(
+        session,
+        "announcement_delete",
+        request=request,
+        user_id=admin.id,
+        actor=admin.email,
+        detail={
+            "announcement_id": str(a.id),
+            "author_email": a.author_email,
+            "status": a.status,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        },
+    )
+    await session.delete(a)
+    return Response(status_code=204)

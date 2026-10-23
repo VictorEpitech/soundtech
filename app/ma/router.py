@@ -1,7 +1,8 @@
+import logging
 from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,9 @@ from app.ratelimit import per_user
 staff_up = require_role(Role.admin, Role.staff)
 music_user = per_user("music", "rl_music_limit", staff_up)
 image_user = per_user("music_image", "rl_music_image_limit", staff_up)
+
+log = logging.getLogger("sound.ma")
+OWNER_TTL = 7 * 86400
 
 router = APIRouter(prefix="/music", tags=["music"])
 
@@ -102,6 +106,51 @@ def _item_out(i: dict[str, Any], secret: str = "") -> dict[str, Any]:
     }
 
 
+def _owner_key(player_id: str) -> str:
+    return f"ma:qowner:{player_id}"
+
+
+def _is_admin(user: User) -> bool:
+    return user.role == Role.admin
+
+
+def _admin_only(user: User) -> None:
+    if not _is_admin(user):
+        raise HTTPException(403, "admin only")
+
+
+async def _owners(request: Request, player_id: str) -> dict[str, str]:
+    try:
+        raw = await request.app.state.redis.hgetall(_owner_key(player_id))
+    except Exception:
+        log.warning("queue owners unavailable", exc_info=True)
+        return {}
+    return {
+        (k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
+        for k, v in raw.items()
+    }
+
+
+async def _record_owners(request: Request, player_id: str, ids: list[str], user: User) -> None:
+    if not ids:
+        return
+    try:
+        r = request.app.state.redis
+        key = _owner_key(player_id)
+        await r.hset(key, mapping=dict.fromkeys(ids, str(user.id)))
+        await r.expire(key, OWNER_TTL)
+    except Exception:
+        log.warning("queue owner not recorded", exc_info=True)
+
+
+def _queue_ids(q: dict[str, Any]) -> list[str]:
+    return [
+        str(i["queue_item_id"])
+        for i in q["items"]
+        if isinstance(i, dict) and i.get("queue_item_id")
+    ]
+
+
 def _queue_item_out(i: dict[str, Any], secret: str, current: bool) -> dict[str, Any]:
     media = i.get("media_item")
     media = media if isinstance(media, dict) else {}
@@ -179,19 +228,32 @@ async def search(
 @router.post("/players/{player_id}/play", status_code=204)
 async def play(
     body: PlayIn,
+    request: Request,
     player_id: str = Depends(declared_player),
-    _: User = Depends(music_user),
+    user: User = Depends(music_user),
     ma: MAClient = Depends(get_ma),
 ) -> None:
-    await _run(ma.play_media(player_id, body.uri, body.option))
+    if _is_admin(user):
+        await _run(ma.play_media(player_id, body.uri, body.option))
+        return
+    if body.option != "add":
+        raise HTTPException(403, "staff can only add to the queue")
+    before = await _run(ma.queue(player_id))
+    known = set(_queue_ids(before))
+    idle = not before["items"] or before.get("state") not in ("playing", "paused")
+    await _run(ma.play_media(player_id, body.uri, "play" if idle else "add"))
+    after = await _run(ma.queue(player_id))
+    await _record_owners(request, player_id, [i for i in _queue_ids(after) if i not in known], user)
 
 
-def _cmd(name: str, cmd: str) -> None:
+def _cmd(name: str, cmd: str, admin_only: bool = False) -> None:
     async def endpoint(
         player_id: str = Depends(declared_player),
-        _: User = Depends(music_user),
+        user: User = Depends(music_user),
         ma: MAClient = Depends(get_ma),
     ) -> None:
+        if admin_only:
+            _admin_only(user)
         await _run(ma.queue_cmd(player_id, cmd))
 
     endpoint.__name__ = name
@@ -199,8 +261,8 @@ def _cmd(name: str, cmd: str) -> None:
 
 
 _cmd("pause", "pause")
-_cmd("next", "next")
-_cmd("previous", "previous")
+_cmd("next", "next", admin_only=True)
+_cmd("previous", "previous", admin_only=True)
 _cmd("resume", "play")
 
 
@@ -219,39 +281,45 @@ async def volume(
 
 @router.get("/players/{player_id}/queue")
 async def get_queue(
+    request: Request,
     player_id: str = Depends(declared_player),
-    _: User = Depends(music_user),
+    user: User = Depends(music_user),
     ma: MAClient = Depends(get_ma),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     q = await _run(ma.queue(player_id))
     cur = q["current_index"]
-    return {
-        "current_index": cur,
-        "items": [
-            _queue_item_out(i, settings.jwt_secret, idx == cur)
-            for idx, i in enumerate(q["items"])
-            if isinstance(i, dict)
-        ],
-    }
+    owners = {} if _is_admin(user) else await _owners(request, player_id)
+    out = []
+    for idx, i in enumerate(q["items"]):
+        if not isinstance(i, dict):
+            continue
+        item = _queue_item_out(i, settings.jwt_secret, idx == cur)
+        item["mine"] = _is_admin(user) or owners.get(str(item["id"])) == str(user.id)
+        out.append(item)
+    return {"current_index": cur, "items": out}
 
 
 @router.post("/players/{player_id}/queue/clear", status_code=204)
 async def queue_clear(
     player_id: str = Depends(declared_player),
-    _: User = Depends(music_user),
+    user: User = Depends(music_user),
     ma: MAClient = Depends(get_ma),
 ) -> None:
+    _admin_only(user)
     await _run(ma.queue_clear(player_id))
 
 
 @router.delete("/players/{player_id}/queue/items/{item_id}", status_code=204)
 async def queue_delete(
+    request: Request,
     item_id: str = ItemId,
     player_id: str = Depends(declared_player),
-    _: User = Depends(music_user),
+    user: User = Depends(music_user),
     ma: MAClient = Depends(get_ma),
 ) -> None:
+    if not _is_admin(user) and (await _owners(request, player_id)).get(item_id) != str(user.id):
+        raise HTTPException(403, "not your queue item")
     await _run(ma.queue_delete(player_id, item_id))
 
 
@@ -260,9 +328,10 @@ async def queue_move(
     body: MoveIn,
     item_id: str = ItemId,
     player_id: str = Depends(declared_player),
-    _: User = Depends(music_user),
+    user: User = Depends(music_user),
     ma: MAClient = Depends(get_ma),
 ) -> None:
+    _admin_only(user)
     await _run(ma.queue_move(player_id, item_id, body.shift))
 
 
@@ -270,9 +339,10 @@ async def queue_move(
 async def queue_play_item(
     item_id: str = ItemId,
     player_id: str = Depends(declared_player),
-    _: User = Depends(music_user),
+    user: User = Depends(music_user),
     ma: MAClient = Depends(get_ma),
 ) -> None:
+    _admin_only(user)
     await _run(ma.queue_play_item(player_id, item_id))
 
 

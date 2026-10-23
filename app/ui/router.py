@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import admin as users_api
 from app import groups as groups_api
 from app import scenes as scenes_api
+from app import students as students_api
 from app.alerts import responses as responses_svc
 from app.alerts import router as alerts_api
 from app.alerts import templates_api as alert_templates_api
@@ -31,6 +33,7 @@ from app.models import (
     Priority,
     Role,
     ScheduleRunStatus,
+    Student,
     User,
 )
 from app.models import Response as ResponseRow
@@ -193,6 +196,7 @@ async def alert_dashboard(
 
 ADMIN_SECTIONS = (
     ("/admin/utilisateurs", "users", "group", "Utilisateurs"),
+    ("/admin/etudiants", "students", "school", "Étudiants"),
     ("/admin/enceintes", "speakers", "speaker", "Enceintes"),
     ("/admin/musique", "music", "music_note", "Scènes"),
     ("/admin/annonces", "announce", "campaign", "Annonces"),
@@ -200,6 +204,7 @@ ADMIN_SECTIONS = (
 )
 ADMIN_BLURBS = {
     "users": "Comptes et rôles.",
+    "students": "Annuaire des étudiants, import CSV annuel.",
     "speakers": "Enceintes, lecteurs Music Assistant détectés, groupes.",
     "music": "Scènes lancées en un clic depuis la page Musique.",
     "announce": "Voix par défaut et messages pré-enregistrés.",
@@ -229,6 +234,26 @@ async def admin_home(request: Request, user: User = Depends(admin_page)) -> Resp
 @router.get("/admin/utilisateurs")
 async def admin_users_page(request: Request, user: User = Depends(admin_page)) -> Response:
     return _admin_page(request, user, "users")
+
+
+@router.get("/admin/etudiants")
+async def admin_students_page(
+    request: Request,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    promos = (await session.scalars(select(Student.promo).distinct().order_by(Student.promo))).all()
+    cursus = (
+        await session.scalars(select(Student.cursus).distinct().order_by(Student.cursus))
+    ).all()
+    return _admin_page(
+        request,
+        user,
+        "students",
+        promos=[p for p in promos if p],
+        cursus_list=[c for c in cursus if c],
+        max_mb=students_api.MAX_IMPORT_BYTES // 1_000_000,
+    )
 
 
 @router.get("/admin/enceintes")
@@ -344,7 +369,7 @@ async def queue_fragment(
         declared = await ma_api.declared_players(session)
         pid = await ma_api.declared_player(player_id, declared)
         ma = ma_api.get_ma(settings)
-        queue = await ma_api.get_queue(pid, user, ma, settings)
+        queue = await ma_api.get_queue(request, pid, user, ma, settings)
     except HTTPException as e:
         return _fragment_error(request, e)
     return render(request, "partials/queue.html", user, queue=queue, player_id=pid)
@@ -359,7 +384,9 @@ async def history_fragment(
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     size = history_api.PAGE_SIZE
-    rows, total = await history_api.search(session, filters, limit=size, offset=(page - 1) * size)
+    rows, total = await history_api.search(
+        session, filters, limit=size, offset=(page - 1) * size, viewer=user
+    )
     pages = max(1, -(-total // size))
     return render(
         request,
@@ -410,6 +437,87 @@ async def users_fragment(
 ) -> Response:
     rows = await users_api.list_users(role=None, session=session, _=user)
     return render(request, "partials/users.html", user, rows=rows)
+
+
+STUDENTS_PAGE_SIZE = 50
+
+
+@router.get("/ui/admin/students")
+async def students_fragment(
+    request: Request,
+    q: str = Query("", max_length=100),
+    promo: str = Query("", max_length=100),
+    cursus: str = Query("", max_length=100),
+    page: int = Query(1, ge=1, le=100_000),
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    cl = students_api.filter_clause(q, promo, cursus)
+    total_all = await session.scalar(select(func.count()).select_from(Student)) or 0
+    total = await session.scalar(select(func.count()).select_from(Student).where(*cl)) or 0
+    pages = max(1, -(-total // STUDENTS_PAGE_SIZE))
+    page = min(page, pages)
+    rows = (
+        await session.scalars(
+            select(Student)
+            .where(*cl)
+            .order_by(Student.promo, Student.last_name, Student.first_name, Student.email)
+            .limit(STUDENTS_PAGE_SIZE)
+            .offset((page - 1) * STUDENTS_PAGE_SIZE)
+        )
+    ).all()
+    by_promo = (
+        await session.execute(
+            select(Student.promo, func.count()).group_by(Student.promo).order_by(Student.promo)
+        )
+    ).all()
+    by_cursus = (
+        await session.execute(
+            select(Student.cursus, func.count()).group_by(Student.cursus).order_by(Student.cursus)
+        )
+    ).all()
+
+    def url(p: int) -> str:
+        return "/ui/admin/students?" + urlencode(
+            {"q": q, "promo": promo, "cursus": cursus, "page": p}
+        )
+
+    return render(
+        request,
+        "partials/students.html",
+        user,
+        rows=rows,
+        total=total,
+        total_all=total_all,
+        page=page,
+        pages=pages,
+        prev_url=url(page - 1) if page > 1 else None,
+        next_url=url(page + 1) if page < pages else None,
+        by_promo=[(k, n) for k, n in by_promo if k],
+        by_cursus=[(k, n) for k, n in by_cursus if k],
+        q=q,
+        promo=promo,
+        cursus=cursus,
+        delete_word=students_api.DELETE_ALL_WORD,
+    )
+
+
+@router.post("/ui/admin/students/preview")
+async def students_preview_fragment(
+    request: Request,
+    body: students_api.CsvIn,
+    user: User = Depends(admin_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    plan = await students_api.build_plan(session, body.csv)
+    return render(
+        request,
+        "partials/students_preview.html",
+        user,
+        plan=plan,
+        csv_text=body.csv,
+        errors=plan.parsed.errors[:100],
+    )
 
 
 @router.get("/ui/admin/speakers")
@@ -560,7 +668,9 @@ async def home_summary_fragment(
     )
     scenes = (await scenes_api.list_scenes(session, active_only=True))[:3]
     upcoming = await planning_api.upcoming(session, 3)
-    rows, _ = await history_api.search(session, history_api.Filters(), limit=5, offset=0)
+    rows, _ = await history_api.search(
+        session, history_api.Filters(), limit=5, offset=0, viewer=user
+    )
     return render(
         request,
         "partials/home_summary.html",

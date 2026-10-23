@@ -494,3 +494,21 @@ class IncidentNotification(Base):
     last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Student(Base):
+    """Annuaire étudiants (import CSV annuel). Séparé de `users` : ils ne se connectent pas."""
+
+    __tablename__ = "students"
+    __table_args__ = (CheckConstraint("email = lower(email)", name="ck_students_email_lower"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    last_name: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    first_name: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    promo: Mapped[str] = mapped_column(String(100), default="", server_default="", index=True)
+    cursus: Mapped[str] = mapped_column(String(100), default="", server_default="", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

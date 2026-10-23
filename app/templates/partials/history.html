@@ -15,7 +15,7 @@
     <td data-label="Message">{{ a.text }}</td>
     <td class="small" data-label="Auteur">{{ a.author_email or '' }}</td>
     <td data-label="Enceintes">{{ a.targets | length }}</td>
-    <td><button class="btn btn-icon btn-text" type="button" title="Rediffuser" aria-label="Rediffuser" data-replay data-text="{{ a.text }}" data-speakers="{{ a.targets | map(attribute='id') | select | join(',') }}"><span class="icon" aria-hidden="true">replay</span></button> <button class="btn btn-icon btn-text" type="button" title="Détail" aria-label="Détail" hx-get="/ui/announce/{{ a.id }}" hx-target="#detail-body" hx-swap="innerHTML"><span class="icon" aria-hidden="true">info</span></button></td>
+    <td><button class="btn btn-icon btn-text" type="button" title="Rediffuser" aria-label="Rediffuser" data-replay data-text="{{ a.text }}" data-speakers="{{ a.targets | map(attribute='id') | select | join(',') }}"><span class="icon" aria-hidden="true">replay</span></button> <button class="btn btn-icon btn-text" type="button" title="Détail" aria-label="Détail" hx-get="/ui/announce/{{ a.id }}" hx-target="#detail-body" hx-swap="innerHTML"><span class="icon" aria-hidden="true">info</span></button>{% if user and user.role == 'admin' %} <button class="btn btn-icon btn-danger" type="button" hx-delete="/announcements/{{ a.id }}" hx-confirm="Supprimer cette annonce de l'historique ?" hx-swap="none" data-refresh="#history" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>{% endif %}</td>
   </tr>
   {% endfor %}
   </tbody>

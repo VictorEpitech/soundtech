@@ -20,6 +20,7 @@ from app.ha.router import get_redis
 from app.models import AlertTemplate, Announcement, AuditLog, Incident, IncidentType, Role, User
 
 staff_up = require_role(Role.admin, Role.staff)
+admin_only = require_role(Role.admin)
 
 log = logging.getLogger("sound.alerts")
 
@@ -353,6 +354,34 @@ async def close_incident(
         return _out(await service.close(session, incident_id, user, request))
     except service.AlertError as e:
         raise HTTPException(e.status, e.detail) from None
+
+
+@router.delete("/{incident_id}", status_code=204)
+async def delete_incident(
+    incident_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(admin_only),
+) -> Response:
+    i = await _get(session, incident_id)
+    if i.status != "closed":
+        raise HTTPException(409, "only closed incidents can be deleted")
+    audit.record(
+        session,
+        "incident_delete",
+        request=request,
+        user_id=admin.id,
+        actor=admin.email,
+        detail={
+            "incident_id": str(i.id),
+            "title": i.title,
+            "type": i.type,
+            "is_test": i.is_test,
+            "created_at": i.created_at.isoformat() if i.created_at else None,
+        },
+    )
+    await session.delete(i)
+    return Response(status_code=204)
 
 
 @router.get("/{incident_id}/responses")

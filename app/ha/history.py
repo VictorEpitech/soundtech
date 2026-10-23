@@ -9,7 +9,7 @@ from sqlalchemy import Select, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Announcement, AnnouncementStatus, SpeakerGroup
+from app.models import Announcement, AnnouncementStatus, Role, SpeakerGroup, User
 
 PAGE_SIZE = 25
 _TRUE = {"true", "1", "oui", "yes", "on"}
@@ -96,6 +96,13 @@ def _like(term: str) -> str:
     return f"%{esc}%"
 
 
+def own_only(stmt: Select, viewer: User | None) -> Select:  # type: ignore[type-arg]
+    """Hors admin, on ne voit que ses propres annonces (viewer=None : pas de restriction)."""
+    if viewer is None or viewer.role == Role.admin:
+        return stmt
+    return stmt.where(Announcement.author_id == viewer.id)
+
+
 async def _apply(session: AsyncSession, stmt: Select, f: Filters) -> Select:  # type: ignore[type-arg]
     A = Announcement
     if f.date_from:
@@ -129,10 +136,16 @@ async def _apply(session: AsyncSession, stmt: Select, f: Filters) -> Select:  # 
 
 
 async def search(
-    session: AsyncSession, f: Filters, *, limit: int = PAGE_SIZE, offset: int = 0
+    session: AsyncSession,
+    f: Filters,
+    *,
+    limit: int = PAGE_SIZE,
+    offset: int = 0,
+    viewer: User | None = None,
 ) -> tuple[list[Announcement], int]:
-    total = await session.scalar(await _apply(session, select(func.count(Announcement.id)), f))
-    stmt = await _apply(session, select(Announcement), f)
+    count = own_only(await _apply(session, select(func.count(Announcement.id)), f), viewer)
+    total = await session.scalar(count)
+    stmt = own_only(await _apply(session, select(Announcement), f), viewer)
     stmt = (
         stmt.order_by(Announcement.created_at.desc(), Announcement.id).limit(limit).offset(offset)
     )

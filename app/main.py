@@ -23,6 +23,7 @@ from app.planning.router import closures_router
 from app.planning.router import router as schedules_router
 from app.push import router as push_router
 from app.scenes import router as scenes_router
+from app.students import router as students_router
 from app.ui.router import register as register_ui
 
 log = logging.getLogger("sound.api")
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Sound", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(students_router)
 app.include_router(speakers_router)
 app.include_router(presets_router)
 app.include_router(announcements_router)

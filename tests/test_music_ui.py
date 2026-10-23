@@ -39,7 +39,7 @@ def _cleanup():
 
 @pytest.fixture
 async def staff(music_api: AsyncClient, make_user, login_as) -> AsyncClient:
-    await login_as(await make_user(Role.staff))
+    await login_as(await make_user(Role.admin))
     return music_api
 
 

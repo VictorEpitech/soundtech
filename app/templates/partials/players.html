@@ -18,13 +18,13 @@
       <span class="muted small">{{ p.current or '' }}</span>
     </div>
     <div class="player-ctl">
-      <button class="btn btn-icon" hx-post="/music/players/{{ p.id }}/previous" hx-swap="none" data-refresh="#players" title="Précédent" aria-label="Précédent"><span class="icon" aria-hidden="true">skip_previous</span></button>
+      {% if user and user.role == 'admin' %}<button class="btn btn-icon" hx-post="/music/players/{{ p.id }}/previous" hx-swap="none" data-refresh="#players" title="Précédent" aria-label="Précédent"><span class="icon" aria-hidden="true">skip_previous</span></button>{% endif %}
       {% if p.state == 'playing' %}
       <button class="btn btn-icon btn-filled" hx-post="/music/players/{{ p.id }}/pause" hx-swap="none" data-refresh="#players" title="Pause" aria-label="Pause"><span class="icon" aria-hidden="true">pause</span></button>
       {% else %}
       <button class="btn btn-icon btn-filled" hx-post="/music/players/{{ p.id }}/resume" hx-swap="none" data-refresh="#players" title="Lecture" aria-label="Lecture"><span class="icon" aria-hidden="true">play_arrow</span></button>
       {% endif %}
-      <button class="btn btn-icon" hx-post="/music/players/{{ p.id }}/next" hx-swap="none" data-refresh="#players" title="Suivant" aria-label="Suivant"><span class="icon" aria-hidden="true">skip_next</span></button>
+      {% if user and user.role == 'admin' %}<button class="btn btn-icon" hx-post="/music/players/{{ p.id }}/next" hx-swap="none" data-refresh="#players" title="Suivant" aria-label="Suivant"><span class="icon" aria-hidden="true">skip_next</span></button>{% endif %}
       <span class="icon vol" aria-hidden="true">volume_up</span>
       <input class="slider" type="range" name="level" min="0" max="100" value="{{ p.volume or 0 }}" aria-label="Volume {{ p.name }}"
              hx-post="/music/players/{{ p.id }}/volume" hx-trigger="change" hx-swap="none" data-json data-ints="level">
