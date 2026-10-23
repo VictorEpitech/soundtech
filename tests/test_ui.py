@@ -254,7 +254,7 @@ async def test_lot678_contracts(client, make_user, login_as, db, fake_ma) -> Non
     music = (await client.get("/music")).text
     assert 'id="search-target"' in music and "group-bar" in music
     css = (await client.get("/static/app.css")).text
-    assert ".group-bar { position: sticky" in css
+    assert "position: sticky" in css and ".group-bar" in css
     async with db() as s:
         inc = await s.scalar(select(Incident).limit(1))
     dash = (await client.get(f"/alerts/{inc.id}")).text

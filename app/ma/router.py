@@ -302,25 +302,30 @@ async def get_queue(
     q = await _run(ma.queue(player_id))
     cur = q["current_index"]
     owners = {} if _is_admin(user) else await _owners(request, player_id)
-    out = []
+    upcoming: list[dict[str, Any]] = []
+    now: dict[str, Any] | None = None
     elapsed = _secs(q.get("elapsed_time"))
     for idx, i in enumerate(q["items"]):
         if not isinstance(i, dict):
             continue
+        is_cur = isinstance(cur, int) and idx == cur
         if isinstance(cur, int) and idx < cur:
             continue
-        if idx == cur and q.get("state") == "idle" and _finished(i, elapsed):
+        if is_cur and q.get("state") != "playing" and _finished(i, elapsed):
             continue
-        item = _queue_item_out(i, settings.jwt_secret, idx == cur)
+        item = _queue_item_out(i, settings.jwt_secret, is_cur)
         item["mine"] = _is_admin(user) or owners.get(str(item["id"])) == str(user.id)
-        out.append(item)
-    now = next((i for i in out if i["current"]), None)
+        if is_cur:
+            now = item
+        else:
+            upcoming.append(item)
     return {
         "current_index": cur,
         "state": q.get("state"),
         "elapsed": elapsed,
         "duration": _secs(now["duration"]) if now else None,
-        "items": out,
+        "now": now,
+        "items": upcoming,
     }
 
 

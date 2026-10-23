@@ -231,8 +231,23 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 .player { display: grid; gap: 8px; }
 .player.is-off { opacity: 0.5; }
 .player-info { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
-.player-ctl { display: flex; align-items: center; gap: 4px; }
-.player-ctl .vol { margin-left: 8px; color: var(--on-surface-variant); }
+.player-ctl { display: flex; align-items: center; gap: 4px 12px; }
+.player-ctl .vol { color: var(--on-surface-variant); }
+.transport { display: flex; align-items: center; justify-content: center; gap: 4px; flex: none; min-width: 176px; }
+.vol-wrap { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.state-badge { min-width: 88px; text-align: center; }
+.player-name { flex: 1 1 140px; min-width: 0; }
+#group-picks { gap: 12px; margin-bottom: 16px; }
+@media (min-width: 720px) {
+  .player { grid-template-columns: minmax(0, 1fr) 420px; align-items: center; gap: 8px 16px; }
+  .player-info { flex-wrap: nowrap; }
+  .player-current { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (max-width: 719px) {
+  .player-ctl { flex-wrap: wrap; }
+  .transport { flex: 1 1 100%; }
+  .vol-wrap { flex: 1 1 100%; }
+}
 .slider { flex: 1; min-width: 80px; accent-color: var(--primary); min-height: 32px; padding: 0; background: none; border: 0; }
 .results { margin-top: 16px; }
 
@@ -390,7 +405,9 @@ button[aria-busy="true"] { opacity: 0.6; cursor: progress; }
 .fold[open] > summary { margin-bottom: 8px; }
 
 /* Musique : barre de sélection collante au-dessus de la barre de navigation */
-.group-bar { position: sticky; bottom: calc(var(--nav-h) + var(--safe-b) + 8px); z-index: 8; background: var(--surface-2); border-radius: var(--r-md); padding: 8px 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.25); }
+.group-bar { display: grid; position: sticky; bottom: calc(var(--nav-h) + var(--safe-b) + 8px); z-index: 8; background: var(--surface-2); border-radius: var(--r-md); padding: 8px 12px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.2); }
+.group-bar[hidden] { display: none; }
+.group-bar .player-info { flex-wrap: nowrap; }
 @media (min-width: 900px) { .group-bar { bottom: 8px; } }
 .scene-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 

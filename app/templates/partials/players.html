@@ -13,11 +13,12 @@
   <li class="player {% if not p.available %}is-off{% endif %}">
     <div class="player-info">
       <label class="check"><input type="checkbox" data-sel="{{ p.id }}" aria-label="Sélectionner {{ p.name }}"><span></span></label>
-      <strong>{{ p.name }}</strong>
-      <span class="badge mono">{{ p.state or '—' }}</span>
-      <span class="muted small">{{ p.current or '' }}</span>
+      <strong class="player-name">{{ p.name }}</strong>
+      <span class="badge mono state-badge">{{ {'idle': 'À l\'arrêt', 'playing': 'Lecture', 'paused': 'Pause'}.get(p.state, p.state or '—') }}</span>
+      <span class="muted small player-current">{{ p.current or '' }}</span>
     </div>
     <div class="player-ctl">
+      <div class="transport">
       {% if user and user.role == 'admin' %}<button class="btn btn-icon" hx-post="/music/players/{{ p.id }}/previous" hx-swap="none" data-refresh="#players" title="Précédent" aria-label="Précédent"><span class="icon" aria-hidden="true">skip_previous</span></button>{% endif %}
       {% if p.state == 'playing' %}
       <button class="btn btn-icon btn-filled" hx-post="/music/players/{{ p.id }}/pause" hx-swap="none" data-refresh="#players" title="Pause" aria-label="Pause"><span class="icon" aria-hidden="true">pause</span></button>
@@ -25,9 +26,10 @@
       <button class="btn btn-icon btn-filled" hx-post="/music/players/{{ p.id }}/resume" hx-swap="none" data-refresh="#players" title="Lecture" aria-label="Lecture"><span class="icon" aria-hidden="true">play_arrow</span></button>
       {% endif %}
       {% if user and user.role == 'admin' %}<button class="btn btn-icon" hx-post="/music/players/{{ p.id }}/next" hx-swap="none" data-refresh="#players" title="Suivant" aria-label="Suivant"><span class="icon" aria-hidden="true">skip_next</span></button>{% endif %}
-      <span class="icon vol" aria-hidden="true">volume_up</span>
+      </div>
+      <div class="vol-wrap"><span class="icon vol" aria-hidden="true">volume_up</span>
       <input class="slider" type="range" name="level" min="0" max="100" value="{{ p.volume or 0 }}" aria-label="Volume {{ p.name }}"
-             hx-post="/music/players/{{ p.id }}/volume" hx-trigger="change" hx-swap="none" data-json data-ints="level">
+             hx-post="/music/players/{{ p.id }}/volume" hx-trigger="change" hx-swap="none" data-json data-ints="level"></div>
     </div>
   </li>
   {% endfor %}

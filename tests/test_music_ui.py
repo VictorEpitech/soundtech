@@ -128,7 +128,8 @@ async def test_queue_listing(staff) -> None:
     assert r.status_code == 200
     body = r.json()
     assert body["current_index"] == 1
-    (b,) = body["items"]  # l'élément passé (qa) n'est plus listé
+    assert body["items"] == []  # ni l'élément passé (qa) ni le courant (qb)
+    b = body["now"]
     assert (
         b["id"] == "qb"
         and b["current"] is True
@@ -143,11 +144,11 @@ async def test_queue_hides_finished(staff, fake_ma) -> None:
     fake_ma.qstate = "idle"
     fake_ma.elapsed = 120
     body = (await staff.get("/music/players/p1/queue")).json()
-    assert body["items"] == []
+    assert body["items"] == [] and body["now"] is None
     r = await staff.get("/ui/music/queue", params={"player_id": "p1"})
-    assert "file d'attente est vide" in r.text.replace("&#39;", "'")
+    assert "File vide" in r.text and 'id="now-playing"' not in r.text
     fake_ma.elapsed = 10  # idle mais pas terminé : reste affiché
-    assert len((await staff.get("/music/players/p1/queue")).json()["items"]) == 1
+    assert (await staff.get("/music/players/p1/queue")).json()["now"]["id"] == "qb"
 
 
 async def test_queue_fragment_now_playing(staff) -> None:
@@ -171,7 +172,9 @@ async def test_queue_filtered_on_declared_players(staff, fake_ma) -> None:
 
 async def test_queue_ui_fragment(staff) -> None:
     r = await staff.get("/ui/music/queue", params={"player_id": "p1"})
-    assert "Deux" in r.text and "is-current" in r.text and "2:00" in r.text
+    assert "Deux" in r.text and "2:00" in r.text and "0 à suivre" in r.text
+    assert r.text.count("Deux") == 1  # uniquement dans le lecteur, pas dans la liste
+    assert "File vide" in r.text and "is-current" not in r.text
     r = await staff.get("/ui/music/queue", params={"player_id": "p3"})
     assert "Deux" not in r.text and "player not declared" in r.text
 

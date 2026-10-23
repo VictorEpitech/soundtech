@@ -1,11 +1,9 @@
 {% if queue is not defined or queue is none %}
 <p class="muted">Cochez un lecteur pour voir sa file d'attente.</p>
-{% elif not queue['items'] %}
-<p class="muted">La file d'attente est vide.</p>
 {% else %}
 {% set is_admin = user and user.role == 'admin' %}
 {% set base = '/music/players/' ~ player_id ~ '/queue' %}
-{% set np = (queue['items'] | selectattr('current') | list | first) if queue['items'] | selectattr('current') | list else none %}
+{% set np = queue.now %}
 {% if np %}
 {% set dur = queue.duration or 0 %}
 {% set el = queue.elapsed or 0 %}
@@ -27,16 +25,19 @@
 </div>
 {% endif %}
 <div class="row between">
-  <span class="muted small">{{ queue['items'] | length }} élément(s)</span>
+  <span class="muted small">{{ queue['items'] | length }} à suivre</span>
   {% if is_admin %}<button class="btn btn-text btn-danger" type="button" hx-post="{{ base }}/clear" hx-swap="none" hx-confirm="Vider la file d'attente ?" data-confirm-label="Vider" data-refresh="#queue"><span class="icon" aria-hidden="true">delete_sweep</span>Vider</button>{% endif %}
 </div>
+{% if not queue['items'] %}
+<p class="muted">File vide</p>
+{% else %}
 <ul class="list media-list">
   {% for i in queue['items'] %}
-  <li class="queue-item {% if i.current %}is-current{% endif %}">
+  <li class="queue-item">
     <button class="media" type="button" {% if is_admin %}hx-post="{{ base }}/items/{{ i.id }}/play" hx-swap="none" data-refresh="#queue" title="Lire à partir d'ici"{% else %}tabindex="-1"{% endif %}>
       <img class="cover" src="{{ i.image or '/static/cover.svg' }}" alt="" loading="lazy" width="48" height="48">
       <span class="media-text">
-        <strong>{% if i.current %}<span class="icon" aria-hidden="true">graphic_eq</span> {% endif %}{{ i.name }}</strong>
+        <strong>{{ i.name }}</strong>
         <span class="muted small">{{ (i.artists or []) | join(', ') }}{% if i.duration %} · {{ '%d:%02d' | format(i.duration // 60, i.duration % 60) }}{% endif %}</span>
       </span>
     </button>
@@ -52,4 +53,5 @@
   </li>
   {% endfor %}
 </ul>
+{% endif %}
 {% endif %}

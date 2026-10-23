@@ -3,10 +3,43 @@
 {% block content %}
 <h1>Musique</h1>
 <section class="card">
+  <h2>Lecteurs</h2>
+  {% if groups %}
+  <div class="chips" id="group-picks">
+    {% for g in groups %}
+    <button class="btn btn-tonal" type="button" data-pick-group="{{ g.id }}" title="Sélectionner le groupe {{ g.name }}"><span class="icon" aria-hidden="true">speaker_group</span>{{ g.name }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div id="group-bar" class="player group-bar" hidden>
+    <div class="player-info"><span class="badge mono" id="sel-count">0</span></div>
+    <div class="player-ctl">
+      <div class="transport">
+        {% if user and user.role == 'admin' %}<button class="btn btn-icon" type="button" data-group="previous" title="Précédent (sélection)" aria-label="Précédent (sélection)"><span class="icon" aria-hidden="true">skip_previous</span></button>{% endif %}
+        <button class="btn btn-icon btn-filled" type="button" data-group="resume" title="Lecture (sélection)" aria-label="Lecture (sélection)"><span class="icon" aria-hidden="true">play_arrow</span></button>
+        <button class="btn btn-icon btn-tonal" type="button" data-group="pause" title="Pause (sélection)" aria-label="Pause (sélection)"><span class="icon" aria-hidden="true">pause</span></button>
+        {% if user and user.role == 'admin' %}<button class="btn btn-icon" type="button" data-group="next" title="Suivant (sélection)" aria-label="Suivant (sélection)"><span class="icon" aria-hidden="true">skip_next</span></button>{% endif %}
+      </div>
+      <div class="vol-wrap"><span class="icon vol" aria-hidden="true">volume_up</span>
+      <input class="slider" type="range" id="group-volume" min="0" max="100" value="30" aria-label="Volume de la sélection"></div>
+    </div>
+  </div>
+  <div id="players" hx-get="/ui/music/players" hx-trigger="refresh, every 8s [!document.activeElement || document.activeElement.type !== 'range']" hx-swap="innerHTML">
+    {% include "partials/players.html" %}
+  </div>
+</section>
+<section class="card">
   <h2>Recherche</h2>
   <label class="field"><span>Titre, artiste, album, playlist…</span><input type="search" id="search-q" maxlength="200" autocomplete="off"></label>
   <p class="muted small" id="search-target" role="status">Aucun lecteur sélectionné : cochez-en dans « Lecteurs ».</p>
   <div id="results" class="results" aria-live="polite"></div>
+</section>
+<section class="card">
+  <h2>En cours et file d'attente</h2>
+  <label class="field"><span>Lecteur</span><select id="queue-player" aria-label="Lecteur de la file"></select></label>
+  <div id="queue" hx-get="/ui/music/queue" hx-trigger="refresh, every 5s [!document.hidden && !document.querySelector('#queue .media:focus')]" hx-swap="innerHTML" hx-indicator="#queue">
+    {% include "partials/queue.html" %}
+  </div>
 </section>
 <section class="card">
   <h2>Scènes</h2>
@@ -26,35 +59,6 @@
   {% else %}
   <p class="muted">Aucune scène.{% if user and user.role == 'admin' %} Créez-en dans <a href="/admin">Admin → Scènes</a>.{% endif %}</p>
   {% endif %}
-</section>
-<section class="card">
-  <h2>Lecteurs</h2>
-  {% if groups %}
-  <div class="chips" id="group-picks">
-    {% for g in groups %}
-    <button class="btn btn-tonal" type="button" data-pick-group="{{ g.id }}" title="Sélectionner le groupe {{ g.name }}"><span class="icon" aria-hidden="true">speaker_group</span>{{ g.name }}</button>
-    {% endfor %}
-  </div>
-  {% endif %}
-  <div id="group-bar" class="player-ctl group-bar" hidden>
-    <span class="badge mono" id="sel-count">0</span>
-    {% if user and user.role == 'admin' %}<button class="btn btn-icon" type="button" data-group="previous" title="Précédent (sélection)" aria-label="Précédent (sélection)"><span class="icon" aria-hidden="true">skip_previous</span></button>{% endif %}
-    <button class="btn btn-icon btn-filled" type="button" data-group="resume" title="Lecture (sélection)" aria-label="Lecture (sélection)"><span class="icon" aria-hidden="true">play_arrow</span></button>
-    <button class="btn btn-icon btn-filled" type="button" data-group="pause" title="Pause (sélection)" aria-label="Pause (sélection)"><span class="icon" aria-hidden="true">pause</span></button>
-    {% if user and user.role == 'admin' %}<button class="btn btn-icon" type="button" data-group="next" title="Suivant (sélection)" aria-label="Suivant (sélection)"><span class="icon" aria-hidden="true">skip_next</span></button>{% endif %}
-    <span class="icon vol" aria-hidden="true">volume_up</span>
-    <input class="slider" type="range" id="group-volume" min="0" max="100" value="30" aria-label="Volume de la sélection">
-  </div>
-  <div id="players" hx-get="/ui/music/players" hx-trigger="refresh, every 8s [!document.activeElement || document.activeElement.type !== 'range']" hx-swap="innerHTML">
-    {% include "partials/players.html" %}
-  </div>
-</section>
-<section class="card">
-  <h2>En cours et file d'attente</h2>
-  <label class="field"><span>Lecteur</span><select id="queue-player" aria-label="Lecteur de la file"></select></label>
-  <div id="queue" hx-get="/ui/music/queue" hx-trigger="refresh, every 5s [!document.hidden && !document.querySelector('#queue .media:focus')]" hx-swap="innerHTML" hx-indicator="#queue">
-    {% include "partials/queue.html" %}
-  </div>
 </section>
 <dialog id="play-menu" class="menu" aria-labelledby="play-menu-title">
   <p class="mono" id="play-menu-title"></p>

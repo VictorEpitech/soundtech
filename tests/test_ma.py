@@ -633,11 +633,12 @@ async def _staff_delete_only_own(music_api, make_user, login_as, fake_ma) -> Non
     a, b = await make_user(Role.staff), await make_user(Role.staff)
     await login_as(a)
     await music_api.post(f"{P}/play", json={"uri": "lib://t/1", "option": "add"})
-    assert (await music_api.get(f"{P}/queue")).json()["items"][0]["mine"] is False  # pas tracé
+    assert (await music_api.get(f"{P}/queue")).json()["now"]["mine"] is False  # pas tracé
     fake_ma.items_after_play = QUEUE_ITEMS
     await music_api.post(f"{P}/play", json={"uri": "lib://t/1", "option": "add"})
-    items = (await music_api.get(f"{P}/queue")).json()["items"]
-    assert [i["mine"] for i in items] == [False, True]
+    body = (await music_api.get(f"{P}/queue")).json()
+    assert [i["mine"] for i in [body["now"], *body["items"]]] == [False, True]
+    assert [i["id"] for i in body["items"]] == ["qb"]
     assert (await music_api.delete(f"{P}/queue/items/qa")).status_code == 403
     assert (await music_api.delete(f"{P}/queue/items/qb")).status_code == 204
     await login_as(b)
