@@ -1,11 +1,12 @@
+{% from "_macros.html" import empty %}
 {% if error %}
 <p class="alert" role="alert"><span class="icon" aria-hidden="true">cloud_off</span>Music Assistant indisponible : {{ error }}</p>
 {% elif undeclared %}
 <p class="muted">Aucune enceinte n'est reliée à un lecteur Music Assistant. Renseignez <span class="mono">ma_player_id</span> dans <a href="/admin">Admin → Enceintes</a>.</p>
 {% elif not players %}
-<p class="muted">Aucun lecteur disponible.</p>
+{{ empty('Aucun lecteur disponible.', tag='p') }}
 {% elif false %}
-<p class="muted">Aucun lecteur.</p>
+{{ empty('Aucun lecteur.', tag='p') }}
 {% else %}
 <ul class="list">
   {% for p in players %}

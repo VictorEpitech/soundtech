@@ -85,7 +85,7 @@ async def test_admin_ui_and_alerts_page_use_templates(ha_api, make_user, login_a
     await _login(make_user, login_as)
     frag = await ha_api.get("/ui/admin/alert-templates")
     assert frag.status_code == 200 and "/alert-templates/" in frag.text
-    assert "Modèles d'alerte" in (await ha_api.get("/admin")).text
+    assert "Modèles d'alerte" in (await ha_api.get("/admin/alertes")).text
     tpl = await _by_type(ha_api, "intrusion")
     url = f"/alert-templates/{tpl['id']}"
     await ha_api.patch(url, json={"is_active": False})

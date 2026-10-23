@@ -1,6 +1,6 @@
-{% from "_macros.html" import status_badge %}
+{% from "_macros.html" import status_badge, empty %}
 {% if not rows %}
-<p class="muted">Aucun évènement.</p>
+{{ empty('Aucun évènement.', tag='p') }}
 {% else %}
 <div class="table-wrap">
 <table class="table">

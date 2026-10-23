@@ -1,4 +1,4 @@
-{% from "_macros.html" import active_toggle %}
+{% from "_macros.html" import active_toggle, empty %}
 <ul class="list">
   {% for u in rows %}
   <li class="row between wrap">
@@ -13,6 +13,6 @@
     <button class="btn btn-icon btn-danger" hx-delete="/admin/users/{{ u.id }}" hx-confirm="Supprimer {{ u.email }} ?" hx-swap="none" data-refresh="#users" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>
   </li>
   {% else %}
-  <li class="muted">Aucun utilisateur.</li>
+  {{ empty('Aucun utilisateur.', tag='li') }}
   {% endfor %}
 </ul>

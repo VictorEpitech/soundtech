@@ -310,4 +310,4 @@ async def test_ui_pages(ha_api, make_user, login_as, db) -> None:
     assert d.status_code == 200 and "Zed" in d.text and "en attente" in d.text.lower()
     assert "interrompue" in (await ha_api.get(f"/ui/announce/{a2.id}")).text
     assert (await ha_api.get("/ui/announce/history", params={"status": "zz"})).status_code == 422
-    assert (await ha_api.get("/admin")).text.count("Voix des annonces") == 1
+    assert (await ha_api.get("/admin/annonces")).text.count("Voix des annonces") == 1

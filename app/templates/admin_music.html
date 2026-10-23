@@ -1,0 +1,9 @@
+{% extends "admin_base.html" %}
+{% block title %}Scènes{% endblock %}
+{% block admin_content %}
+<section class="card">
+  <h2>Scènes</h2>
+  <p class="muted small">Un clic sur la page Musique lance le média sur les enceintes actives du groupe. Jamais pendant un incident d'alerte en cours.</p>
+  <div id="scenes" hx-get="/ui/admin/scenes" hx-trigger="load, refresh"></div>
+</section>
+{% endblock %}

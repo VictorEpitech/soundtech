@@ -1,76 +1,10 @@
-{% extends "base.html" %}
+{% extends "admin_base.html" %}
 {% block title %}Administration{% endblock %}
-{% block content %}
-<h1>Administration</h1>
-<p><a class="btn btn-tonal" href="/admin/planning"><span class="icon" aria-hidden="true">event_repeat</span>Planification</a></p>
-
-<section class="card">
-  <h2>Utilisateurs et rôles</h2>
-  <form class="row" hx-post="/admin/users" hx-ext="json-typed" data-json data-toast="Utilisateur créé" data-reset data-refresh="#users" hx-swap="none">
-    <label class="field grow"><span>Email</span><input type="email" name="email" required maxlength="320"></label>
-    <label class="field grow"><span>Nom</span><input type="text" name="display_name" maxlength="255"></label>
-    <label class="field"><span>Rôle</span>
-      <select name="role">{% for r in roles %}<option value="{{ r.value }}" {% if r.value == 'staff' %}selected{% endif %}>{{ role_labels[r.value] }}</option>{% endfor %}</select>
-    </label>
-    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">person_add</span>Ajouter</button>
-  </form>
-  <div id="users" hx-get="/ui/admin/users" hx-trigger="load, refresh"></div>
-</section>
-
-<section class="card">
-  <h2>Enceintes</h2>
-  <form class="grid-form" hx-post="/speakers" hx-ext="json-typed" data-json data-toast="Enceinte créée" data-reset data-refresh="#speakers" hx-swap="none">
-    <label class="field"><span>Entité HA</span><input class="mono" type="text" name="entity_id" required placeholder="media_player.salon" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
-    <label class="field"><span>Nom</span><input type="text" name="name" required maxlength="255"></label>
-    <label class="field"><span>Groupe</span><input type="text" name="group" maxlength="100"></label>
-    <label class="field"><span>notify_service</span><input class="mono" type="text" name="notify_service" placeholder="notify.alexa_media_salon" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
-    <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" pattern="\S(.*\S)?"></label>
-    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Ajouter</button>
-  </form>
-  <div id="speakers" hx-get="/ui/admin/speakers" hx-trigger="load, refresh"></div>
-  <h3>Lecteurs Music Assistant détectés</h3>
-  <p class="muted small">Copiez l'ID dans le champ ma_player_id d'une enceinte, ou rattachez-le directement avec « Utiliser ».</p>
-  <div id="ma-players" hx-get="/ui/admin/ma-players" hx-trigger="load, refresh from:#speakers"></div>
-</section>
-
-<section class="card">
-  <h2>Groupes d'enceintes</h2>
-  <div id="speaker-groups" hx-get="/ui/admin/speaker-groups" hx-trigger="load, refresh"></div>
-</section>
-
-<section class="card">
-  <h2>Scènes</h2>
-  <p class="muted small">Un clic sur la page Musique lance le média sur les enceintes actives du groupe. Jamais pendant un incident d'alerte en cours.</p>
-  <div id="scenes" hx-get="/ui/admin/scenes" hx-trigger="load, refresh"></div>
-</section>
-
-<section class="card">
-  <h2>Modèles d'alerte</h2>
-  <p class="muted small">Un modèle par type d'incident : texte lu sur les enceintes et envoyé sur Teams.</p>
-  <div id="alert-templates" hx-get="/ui/admin/alert-templates" hx-trigger="load, refresh"></div>
-</section>
-
-<section class="card">
-  <h2>Voix des annonces</h2>
-  <p class="muted small">Préréglage appliqué quand l'auteur ne choisit rien. Les alertes de sécurité gardent toujours la voix par défaut de l'enceinte.</p>
-  <form class="row" hx-put="/announcements/defaults" hx-ext="json-typed" data-json data-toast="Préréglage enregistré" hx-swap="none">
-    <label class="field grow"><span>Voix par défaut</span>
-      <select name="voice"><option value="">Voix de l'enceinte</option>{% for v in voices %}<option value="{{ v }}" {% if v == defaults.voice %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
-    </label>
-    <label class="field grow"><span>Langue par défaut</span>
-      <select name="lang"><option value="">Langue de l'enceinte</option>{% for l in langs %}<option value="{{ l }}" {% if l == defaults.lang %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-    </label>
-    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">save</span>Enregistrer</button>
-  </form>
-</section>
-
-<section class="card">
-  <h2>Messages pré-enregistrés</h2>
-  <form class="stack" hx-post="/presets" hx-ext="json-typed" data-json data-toast="Message créé" data-reset data-refresh="#presets" hx-swap="none">
-    <label class="field"><span>Titre</span><input type="text" name="title" required maxlength="255"></label>
-    <label class="field"><span>Texte</span><textarea name="text" rows="2" required maxlength="1000"></textarea></label>
-    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Ajouter</button>
-  </form>
-  <div id="presets" hx-get="/ui/admin/presets" hx-trigger="load, refresh"></div>
-</section>
+{% block admin_content %}
+<div class="grid">
+  {% for url, key, ico, label in sections %}
+  <a class="card tile" href="{{ url }}"><span class="icon icon-lg" aria-hidden="true">{{ ico }}</span><h2>{{ label }}</h2><p class="muted">{{ blurbs[key] }}</p></a>
+  {% endfor %}
+  <a class="card tile" href="/planning"><span class="icon icon-lg" aria-hidden="true">event_repeat</span><h2>Planification</h2><p class="muted">Annonces et scènes programmées, fermetures, journal.</p></a>
+</div>
 {% endblock %}

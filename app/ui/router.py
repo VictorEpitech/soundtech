@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,7 +24,15 @@ from app.ha import history as history_api
 from app.ha import router as ha_api
 from app.ha import service as ha_service
 from app.ma import router as ma_api
-from app.models import Announcement, Priority, Role, ScheduleRunStatus, User
+from app.models import (
+    Announcement,
+    Incident,
+    IncidentStatus,
+    Priority,
+    Role,
+    ScheduleRunStatus,
+    User,
+)
 from app.models import Response as ResponseRow
 from app.planning import router as planning_api
 from app.ui import pwa
@@ -45,9 +54,13 @@ ROLE_LABELS = {"admin": "Administrateur", "staff": "Personnel", "student": "Étu
 
 
 def render(request: Request, name: str, user: User | None = None, **ctx: Any) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request, name, {"user": user, "role_labels": ROLE_LABELS, "roles": list(Role), **ctx}
-    )
+    base: dict[str, Any] = {"user": user, "role_labels": ROLE_LABELS, "roles": list(Role)}
+    if user is not None and user.role in (Role.admin, Role.staff):
+        # Mots de confirmation : garde-fou anti-erreur servi à toute page (feuille globale).
+        settings = get_settings()
+        base["alert_word"] = settings.alert_confirm_text
+        base["test_word"] = settings.alert_test_confirm_text
+    return templates.TemplateResponse(request, name, {**base, **ctx})
 
 
 def register(app: FastAPI) -> None:
@@ -101,6 +114,9 @@ async def music_page(
     ctx = await _players(settings, user, session)
     ctx["scenes"] = await scenes_api.list_scenes(session, active_only=True)
     ctx["groups"] = _group_rows(await groups_api.list_groups(session, active_only=True))
+    ctx["incident_active"] = await session.scalar(
+        select(Incident).where(Incident.status == IncidentStatus.sent.value).limit(1)
+    )
     return render(request, "music.html", user, active="music", **ctx)
 
 
@@ -175,18 +191,72 @@ async def alert_dashboard(
     )
 
 
+ADMIN_SECTIONS = (
+    ("/admin/utilisateurs", "users", "group", "Utilisateurs"),
+    ("/admin/enceintes", "speakers", "speaker", "Enceintes"),
+    ("/admin/musique", "music", "music_note", "Scènes"),
+    ("/admin/annonces", "announce", "campaign", "Annonces"),
+    ("/admin/alertes", "alerts", "emergency_home", "Alertes"),
+)
+ADMIN_BLURBS = {
+    "users": "Comptes et rôles.",
+    "speakers": "Enceintes, lecteurs Music Assistant détectés, groupes.",
+    "music": "Scènes lancées en un clic depuis la page Musique.",
+    "announce": "Voix par défaut et messages pré-enregistrés.",
+    "alerts": "Textes diffusés pour chaque type d'alerte.",
+}
+
+
+def _admin_page(request: Request, user: User, section: str, **ctx: Any) -> Response:
+    name = "admin.html" if section == "index" else f"admin_{section}.html"
+    return render(
+        request,
+        name,
+        user,
+        active="admin",
+        section=section,
+        sections=ADMIN_SECTIONS,
+        blurbs=ADMIN_BLURBS,
+        **ctx,
+    )
+
+
 @router.get("/admin")
-async def admin_home(
+async def admin_home(request: Request, user: User = Depends(admin_page)) -> Response:
+    return _admin_page(request, user, "index")
+
+
+@router.get("/admin/utilisateurs")
+async def admin_users_page(request: Request, user: User = Depends(admin_page)) -> Response:
+    return _admin_page(request, user, "users")
+
+
+@router.get("/admin/enceintes")
+async def admin_speakers_page(request: Request, user: User = Depends(admin_page)) -> Response:
+    return _admin_page(request, user, "speakers")
+
+
+@router.get("/admin/musique")
+async def admin_music_page(request: Request, user: User = Depends(admin_page)) -> Response:
+    return _admin_page(request, user, "music")
+
+
+@router.get("/admin/alertes")
+async def admin_alerts_page(request: Request, user: User = Depends(admin_page)) -> Response:
+    return _admin_page(request, user, "alerts")
+
+
+@router.get("/admin/annonces")
+async def admin_announce_page(
     request: Request,
     user: User = Depends(admin_page),
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> Response:
-    return render(
+    return _admin_page(
         request,
-        "admin.html",
         user,
-        active="admin",
+        "announce",
         voices=settings.announce_voices,
         langs=settings.announce_langs,
         defaults=await ha_api.get_defaults(session, settings),
@@ -194,9 +264,14 @@ async def admin_home(
 
 
 @router.get("/admin/planning")
+async def planning_legacy(user: User = Depends(admin_page)) -> Response:
+    return RedirectResponse("/planning", status_code=301)
+
+
+@router.get("/planning")
 async def planning_page(
     request: Request,
-    user: User = Depends(admin_page),
+    user: User = Depends(staff_page),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     schedules = await planning_api.list_schedules(session, user)
@@ -204,7 +279,8 @@ async def planning_page(
         request,
         "planning.html",
         user,
-        active="admin",
+        active="planning",
+        can_edit=user.role == Role.admin,
         schedules=schedules,
         statuses=[s.value for s in ScheduleRunStatus if s is not ScheduleRunStatus.running],
     )
@@ -436,6 +512,98 @@ async def scenes_fragment(
 HISTORY_SIZE = 25
 
 
+async def _health(
+    request: Request, settings: Settings, session: AsyncSession
+) -> list[dict[str, Any]]:
+    """Résumé de santé sans appel externe bloquant : configuration + ping local borné."""
+
+    async def ok(coro: Any) -> bool:
+        try:
+            await asyncio.wait_for(coro, 1.0)
+            return True
+        except Exception:
+            return False
+
+    redis = getattr(request.app.state, "redis", None)
+    return [
+        {"name": "Base de données", "ok": await ok(session.execute(select(1)))},
+        {"name": "Redis", "ok": redis is not None and await ok(redis.ping())},
+        {
+            "name": "Home Assistant",
+            "ok": bool(settings.ha_url and settings.ha_token.get_secret_value()),
+            "cfg": True,
+        },
+        {"name": "Music Assistant", "ok": bool(settings.ma_url), "cfg": True},
+        {
+            "name": "Teams",
+            "ok": bool(settings.teams_app_id and settings.teams_conversation_id),
+            "cfg": True,
+        },
+    ]
+
+
+@router.get("/ui/home/summary")
+async def home_summary_fragment(
+    request: Request,
+    user: User = Depends(staff_page),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    active = await session.scalar(
+        select(Incident)
+        .where(Incident.status.in_((IncidentStatus.sent.value, IncidentStatus.failed.value)))
+        .order_by(Incident.created_at.desc())
+        .limit(1)
+    )
+    last_incident = active or await session.scalar(
+        select(Incident).order_by(Incident.created_at.desc()).limit(1)
+    )
+    scenes = (await scenes_api.list_scenes(session, active_only=True))[:3]
+    upcoming = await planning_api.upcoming(session, 3)
+    rows, _ = await history_api.search(session, history_api.Filters(), limit=5, offset=0)
+    return render(
+        request,
+        "partials/home_summary.html",
+        user,
+        active_incident=active,
+        last_incident=last_incident,
+        scenes=scenes,
+        upcoming=upcoming,
+        announcements=[ha_api._ann_out(a) for a in rows],
+        health=await _health(request, settings, session),
+        action_labels=ACTION_LABELS,
+    )
+
+
+@router.get("/ui/alerts/sheet")
+async def alert_sheet_fragment(
+    request: Request,
+    user: User = Depends(staff_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    tpls = [
+        alert_templates_api.out(t)
+        for t in await alert_templates_api.list_templates(session, active_only=True)
+    ]
+    return render(request, "partials/alert_sheet.html", user, templates=tpls)
+
+
+@router.get("/ui/alerts/active")
+async def active_incident_fragment(
+    request: Request,
+    user: User = Depends(staff_page),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    q = (
+        select(Incident)
+        .where(Incident.status.in_((IncidentStatus.sent.value, IncidentStatus.failed.value)))
+        .order_by(Incident.created_at.desc())
+        .limit(1)
+    )
+    inc = await session.scalar(q)
+    return render(request, "partials/incident_banner.html", user, incident=inc)
+
+
 @router.get("/ui/alerts/list")
 async def incidents_fragment(
     request: Request,
@@ -495,7 +663,7 @@ ACTION_LABELS = {"announcement": "Annonce", "scene": "Scène", "stop": "Pause / 
 @router.get("/ui/planning/schedules")
 async def schedules_fragment(
     request: Request,
-    user: User = Depends(admin_page),
+    user: User = Depends(staff_page),
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> Response:
@@ -503,6 +671,7 @@ async def schedules_fragment(
         request,
         "partials/schedules.html",
         user,
+        can_edit=user.role == Role.admin,
         rows=await planning_api.list_schedules(session, user),
         speakers=[s for s in await ha_api.list_speakers(session, user) if s["is_active"]],
         groups=[g for g in _group_rows(await groups_api.list_groups(session)) if g["is_active"]],
@@ -519,7 +688,7 @@ async def schedules_fragment(
 async def schedule_preview_fragment(
     request: Request,
     schedule_id: uuid.UUID,
-    user: User = Depends(admin_page),
+    user: User = Depends(staff_page),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     data = await planning_api.preview(schedule_id, session, user)
@@ -529,14 +698,20 @@ async def schedule_preview_fragment(
 @router.get("/ui/planning/closures")
 async def closures_fragment(
     request: Request,
-    user: User = Depends(admin_page),
+    user: User = Depends(staff_page),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     year = datetime.now(UTC).year
     cal = await planning_api.get_calendar(year, session, user)
     nxt = planning_api.holidays_out(year + 1)
     return render(
-        request, "partials/closures.html", user, cal=cal, next_holidays=nxt, kinds=CLOSURE_KINDS
+        request,
+        "partials/closures.html",
+        user,
+        can_edit=user.role == Role.admin,
+        cal=cal,
+        next_holidays=nxt,
+        kinds=CLOSURE_KINDS,
     )
 
 
@@ -545,7 +720,7 @@ async def runs_fragment(
     request: Request,
     schedule_id: str = "",
     status: str = "",
-    user: User = Depends(admin_page),
+    user: User = Depends(staff_page),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     try:

@@ -4,17 +4,23 @@
 <h1>Annonces</h1>
 <section class="card">
   <h2>Nouvelle annonce</h2>
-  <form id="announce-form" class="stack" hx-post="/announcements" hx-ext="json-typed" data-json data-arrays="speaker_ids,group_ids" data-bools="is_test,force_volume" data-toast="Annonce envoyée" data-reset data-refresh="#history" hx-confirm="Diffuser cette annonce ?" hx-swap="none">
+  <form id="announce-form" class="stack" hx-post="/announcements" hx-ext="json-typed" data-json data-arrays="speaker_ids,group_ids" data-bools="is_test,force_volume" data-toast="Annonce envoyée" data-reset data-refresh="#history" hx-swap="none">
     {% if presets %}
-    <label class="field"><span>Message pré-enregistré</span>
+    <div class="seg" role="group" aria-label="Type de message">
+      <button type="button" class="btn btn-tonal" data-mode="preset" aria-pressed="true">Pré-enregistré</button>
+      <button type="button" class="btn btn-text" data-mode="free" aria-pressed="false">Libre</button>
+    </div>
+    <label class="field" id="preset-field"><span>Message pré-enregistré</span>
       <select name="preset_id" id="preset-select">
-        <option value="">— Message libre —</option>
+        <option value="">— Choisir un message —</option>
         {% for p in presets %}<option value="{{ p.id }}" title="{{ p.text }}">{{ p.title }}</option>{% endfor %}
       </select>
     </label>
+    <p class="muted small" id="preset-text" hidden></p>
     {% endif %}
-    <label class="field"><span>Texte</span>
-      <textarea name="text" id="free-text" rows="3" maxlength="500" placeholder="Message à diffuser"></textarea>
+    <label class="field" id="free-field"{% if presets %} hidden{% endif %}><span>Texte</span>
+      <textarea name="text" id="free-text" rows="3" maxlength="500" placeholder="Message à diffuser" aria-describedby="free-count"></textarea>
+      <span class="muted small" id="free-count" aria-live="off">0 / 500</span>
     </label>
     {% if groups %}
     <fieldset class="chips">
@@ -24,6 +30,8 @@
       {% endfor %}
     </fieldset>
     {% endif %}
+    <details class="fold" id="speakers-fold">
+    <summary>Choisir des enceintes précises</summary>
     <fieldset class="chips">
       <legend>Enceintes</legend>
       {% for s in speakers %}
@@ -32,7 +40,9 @@
       <p class="muted">Aucune enceinte active. Un administrateur doit en déclarer.</p>
       {% endfor %}
     </fieldset>
+    </details>
     <p class="muted" id="target-count" role="status" aria-live="polite">0 enceinte ciblée</p>
+    <details class="fold"><summary>Options (voix, langue, volume, test)</summary>
     <div class="row">
       <label class="field grow"><span>Voix</span>
         <select name="voice" id="voice-select">
@@ -49,9 +59,16 @@
     </div>
     <label class="check"><input type="checkbox" name="is_test" value="true"><span>Ceci est un test</span></label>
     {% if volume_level %}<label class="check"><input type="checkbox" name="force_volume" value="true" checked><span>Forcer le volume ({{ volume_level }} %)</span></label>{% endif %}
+    </details>
     <div class="row">
       <button class="btn btn-tonal" type="button" id="preview-btn" disabled><span class="icon" aria-hidden="true">visibility</span>Prévisualiser</button>
       <button class="btn btn-filled" type="submit" id="send-btn" disabled><span class="icon" aria-hidden="true">send</span>Envoyer</button>
+    </div>
+    <p class="muted small" id="send-help" role="status"></p>
+    <div id="send-status" class="ad-status" role="status" aria-live="polite" hidden>
+      <span id="send-status-text"></span>
+      <a href="#history" id="send-history">Voir dans l'historique</a>
+      <button class="btn btn-tonal" type="button" id="send-retry" hidden>Réessayer</button>
     </div>
   </form>
 </section>
@@ -71,6 +88,7 @@
 </dialog>
 <section class="card">
   <h2>Historique</h2>
+  <details class="fold" id="hist-fold"><summary>Filtres</summary>
   <form id="hist-filters" class="stack" hx-get="/ui/announce/history" hx-target="#history" hx-trigger="change, submit, input from:#f-q delay:400ms, input from:#f-author delay:400ms" hx-swap="innerHTML">
     <div class="row">
       <label class="field"><span>Du</span><input type="date" name="date_from"></label>
@@ -94,6 +112,7 @@
       <button class="btn btn-text" type="reset" id="hist-reset"><span class="icon" aria-hidden="true">filter_alt_off</span>Réinitialiser</button>
     </div>
   </form>
+  </details>
   <div id="history" hx-get="/ui/announce/history" hx-include="#hist-filters" hx-trigger="load, refresh, every 10s [document.querySelector('#history [data-page]') === null || document.querySelector('#history [data-page]').dataset.page === '1']"></div>
 </section>
 

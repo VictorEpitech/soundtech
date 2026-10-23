@@ -1,0 +1,7 @@
+{% if incident %}
+<a class="incident-banner{{ ' is-test' if incident.is_test }}{{ ' is-failed' if incident.status == 'failed' }}" href="/alerts/{{ incident.id }}">
+  <span class="icon" aria-hidden="true">{{ 'science' if incident.is_test else 'emergency_home' }}</span>
+  <span><strong>{% if incident.status == 'failed' %}Diffusion en échec{% elif incident.is_test %}Exercice en cours{% else %}Incident en cours{% endif %}</strong> : {{ incident.title }}</span>
+  <span class="incident-banner-cta">Ouvrir le tableau de bord<span class="icon" aria-hidden="true">chevron_right</span></span>
+</a>
+{% endif %}

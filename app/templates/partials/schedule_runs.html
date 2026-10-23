@@ -1,6 +1,6 @@
-{% from "_macros.html" import status_badge %}
+{% from "_macros.html" import status_badge, empty %}
 {% if not rows %}
-<p class="muted">Aucune exécution.</p>
+{{ empty('Aucune exécution.', tag='p') }}
 {% else %}
 <div class="table-wrap">
 <table class="table">
@@ -8,10 +8,10 @@
   <tbody>
   {% for r in rows %}
   <tr>
-    <td class="mono">{{ r.scheduled_for[:16] | replace('T', ' ') }}</td>
-    <td>{{ r.schedule_name }}{% if r.trigger == 'manual' %} <span class="badge mono">manuel</span>{% endif %}</td>
-    <td>{{ status_badge(r.status) }}</td>
-    <td class="small">{{ r.detail or '' }}</td>
+    <td class="mono" data-label="Prévu à (UTC)">{{ r.scheduled_for[:16] | replace('T', ' ') }}</td>
+    <td data-label="Planification">{{ r.schedule_name }}{% if r.trigger == 'manual' %} <span class="badge mono">manuel</span>{% endif %}</td>
+    <td data-label="Statut">{{ status_badge(r.status) }}</td>
+    <td class="small" data-label="Détail">{{ r.detail or '' }}</td>
   </tr>
   {% endfor %}
   </tbody>

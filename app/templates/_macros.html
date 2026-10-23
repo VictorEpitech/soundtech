@@ -39,3 +39,7 @@
 {%- endmacro %}
 
 {% macro status_label(status) -%}{{ _STATUS.get(status, (status,))[0] }}{%- endmacro %}
+
+{% macro empty(title, hint='', icon_name='inbox', tag='p') -%}
+<{{ tag }} class="empty muted"><span class="icon" aria-hidden="true">{{ icon_name }}</span><span>{{ title }}{% if hint %}<span class="empty-hint">{{ hint }}</span>{% endif %}</span></{{ tag }}>
+{%- endmacro %}

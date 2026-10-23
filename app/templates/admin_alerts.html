@@ -1,0 +1,9 @@
+{% extends "admin_base.html" %}
+{% block title %}Modèles d'alerte{% endblock %}
+{% block admin_content %}
+<section class="card">
+  <h2>Modèles d'alerte</h2>
+  <p class="muted small">Un modèle par type d'incident : texte lu sur les enceintes et envoyé sur Teams.</p>
+  <div id="alert-templates" hx-get="/ui/admin/alert-templates" hx-trigger="load, refresh"></div>
+</section>
+{% endblock %}

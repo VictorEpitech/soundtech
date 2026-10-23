@@ -1,4 +1,4 @@
-{% from "_macros.html" import active_toggle %}
+{% from "_macros.html" import active_toggle, empty %}
 {% macro fields(sc) %}
 <div class="row">
   <label class="field grow"><span>Nom</span><input type="text" name="name" value="{{ sc.name if sc else '' }}" required maxlength="100"></label>
@@ -61,6 +61,6 @@
     </div>
   </li>
   {% else %}
-  <li class="muted">Aucune scène. Une scène lance un média sur un groupe d'enceintes en un clic depuis la page Musique.</li>
+  {{ empty("Aucune scène. Une scène lance un média sur un groupe d'enceintes en un clic depuis la page Musique.", tag='li') }}
   {% endfor %}
 </ul>

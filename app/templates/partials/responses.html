@@ -1,9 +1,9 @@
 {% from "_macros.html" import status_badge %}
 {% set c = data.counts %}
-<div class="counters">
+<div class="counters" role="status">
+  <span class="badge mono status-failed counter-danger"><span class="icon icon-sm" aria-hidden="true">warning</span> En danger : {{ c.danger }}</span>
   <span class="badge mono status-done"><span class="icon icon-sm" aria-hidden="true">check_circle</span> En sécurité (campus) : {{ c.safe_campus }}</span>
   <span class="badge mono status-done"><span class="icon icon-sm" aria-hidden="true">check_circle</span> En sécurité (hors campus) : {{ c.safe_offsite }}</span>
-  <span class="badge mono status-failed"><span class="icon icon-sm" aria-hidden="true">warning</span> En danger : {{ c.danger }}</span>
   <span class="badge mono">Répondants : {{ c.responded }}</span>
   {% if data.roster.configured %}<span class="badge mono">Sans réponse : {{ c.not_responded }} / {{ c.roster_total }}</span>{% endif %}
 </div>
@@ -17,7 +17,7 @@
     <h3>Répondants</h3>
     {% if not data.respondents %}<p class="muted">Aucune réponse pour l'instant.</p>{% else %}
     <ul class="list">
-      {% for r in data.respondents %}
+      {% for r in (data.respondents | selectattr('status', 'equalto', 'danger') | list) + (data.respondents | rejectattr('status', 'equalto', 'danger') | list) %}
       <li class="resp resp-{{ r.status }}">
         <div class="row between">
           <strong>{{ r.name or r.email or r.aad_id }}</strong>

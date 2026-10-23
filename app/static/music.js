@@ -140,5 +140,21 @@
   }
   picker.addEventListener("change", loadQueue);
   document.addEventListener("selection-changed", syncPicker);
+
+  // Cible affichée sous la recherche : « sur : Cantine, Hall ».
+  function syncTarget() {
+    var el = document.getElementById("search-target");
+    if (!el) return;
+    var names = [];
+    document.querySelectorAll("#players [data-sel]:checked").forEach(function (b) {
+      names.push((b.getAttribute("aria-label") || "").replace(/^Sélectionner /, ""));
+    });
+    el.textContent = names.length
+      ? "Lecture lancée sur : " + names.join(", ")
+      : "Aucun lecteur sélectionné : cochez-en dans « Lecteurs ».";
+  }
+  document.addEventListener("selection-changed", syncTarget);
+  document.body.addEventListener("htmx:afterSwap", function (e) { if (e.target.id === "players") syncTarget(); });
+  syncTarget();
   syncPicker();
 })();

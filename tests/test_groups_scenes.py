@@ -403,8 +403,9 @@ async def test_ui_pages(admin, db) -> None:
     assert g["name"] in r.text and 'name="member_ids"' in r.text
     r = await admin.get("/ui/admin/scenes")
     assert sc["name"] in r.text and "Nouvelle scène" in r.text
-    r = await admin.get("/admin")
-    assert "Groupes d'enceintes" in r.text and "ui/admin/scenes" in r.text
+    r = await admin.get("/admin/enceintes")
+    assert "Groupes d'enceintes" in r.text and "ui/admin/speaker-groups" in r.text
+    assert "ui/admin/scenes" in (await admin.get("/admin/musique")).text
 
 
 async def test_ui_staff_cannot_open_admin_fragments(api, make_user, login_as) -> None:

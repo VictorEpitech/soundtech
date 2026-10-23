@@ -1,4 +1,4 @@
-{% from "_macros.html" import active_toggle %}
+{% from "_macros.html" import active_toggle, empty %}
 <form class="stack" hx-post="/speaker-groups" hx-ext="json-typed" data-json data-arrays="member_ids" data-toast="Groupe créé" data-reset data-refresh="#speaker-groups" hx-swap="none">
   <div class="row">
     <label class="field grow"><span>Nom</span><input type="text" name="name" required maxlength="100"></label>
@@ -9,7 +9,7 @@
     {% for s in speakers %}
     <label class="chip"><input type="checkbox" name="member_ids" value="{{ s.id }}"><span>{{ s.name }}{% if not s.is_active %} (inactive){% endif %}</span></label>
     {% else %}
-    <p class="muted">Aucune enceinte déclarée.</p>
+    {{ empty('Aucune enceinte déclarée.', tag='p') }}
     {% endfor %}
   </fieldset>
   <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Créer le groupe</button>
@@ -40,6 +40,6 @@
     </div>
   </li>
   {% else %}
-  <li class="muted">Aucun groupe d'enceintes. Créez-en un pour cibler plusieurs enceintes en un clic.</li>
+  {{ empty("Aucun groupe d'enceintes. Créez-en un pour cibler plusieurs enceintes en un clic.", tag='li') }}
   {% endfor %}
 </ul>

@@ -37,30 +37,42 @@
     },
   });
 
-  // Toast : les erreurs restent affichées jusqu'à fermeture (ou action) ; opts.action = { label, run }.
-  var toastEl, toastTimer;
+  // Toasts en pile (max 3) : succès éphémères (role=status), erreurs persistantes jusqu'à fermeture (role=alert).
+  // opts.action = { label, run }.
+  var MAX_TOASTS = 3;
+  function stack() { return document.getElementById("toast"); }
+  function dismiss(item) {
+    clearTimeout(item._timer);
+    item.classList.remove("show");
+    setTimeout(function () { if (item.parentNode) item.parentNode.removeChild(item); }, 200);
+  }
   function hideToast() {
-    clearTimeout(toastTimer);
-    if (toastEl) toastEl.classList.remove("show");
+    var st = stack();
+    if (st) Array.prototype.slice.call(st.children).forEach(dismiss);
   }
   function toast(msg, isError, opts) {
-    toastEl = toastEl || document.getElementById("toast");
-    clearTimeout(toastTimer);
-    toastEl.setAttribute("role", isError ? "alert" : "status");
-    toastEl.setAttribute("aria-live", isError ? "assertive" : "polite");
-    toastEl.textContent = "";
+    var st = stack();
+    if (!st) return;
+    while (st.children.length >= MAX_TOASTS) {
+      var old = Array.prototype.find.call(st.children, function (c) { return !c.classList.contains("is-error"); }) || st.children[0];
+      if (old._timer) clearTimeout(old._timer);
+      st.removeChild(old);
+    }
+    var item = document.createElement("div");
+    item.className = "toast-item" + (isError ? " is-error" : "");
+    item.setAttribute("role", isError ? "alert" : "status");
     var span = document.createElement("span");
     span.className = "toast-msg";
     span.textContent = msg;
-    toastEl.appendChild(span);
+    item.appendChild(span);
     var action = opts && opts.action;
     if (action) {
       var b = document.createElement("button");
       b.type = "button";
       b.className = "btn";
       b.textContent = action.label;
-      b.addEventListener("click", function () { hideToast(); action.run(); });
-      toastEl.appendChild(b);
+      b.addEventListener("click", function () { dismiss(item); action.run(); });
+      item.appendChild(b);
     }
     if (isError) {
       var x = document.createElement("button");
@@ -68,12 +80,113 @@
       x.className = "btn btn-icon";
       x.setAttribute("aria-label", "Fermer le message");
       x.innerHTML = '<span class="icon" aria-hidden="true">close</span>';
-      x.addEventListener("click", hideToast);
-      toastEl.appendChild(x);
+      x.addEventListener("click", function () { dismiss(item); });
+      item.appendChild(x);
     }
-    toastEl.classList.toggle("is-error", !!isError);
-    toastEl.classList.add("show");
-    if (!isError) toastTimer = setTimeout(hideToast, 4000);
+    st.appendChild(item);
+    requestAnimationFrame(function () { item.classList.add("show"); });
+    if (!isError) item._timer = setTimeout(function () { dismiss(item); }, 4000);
+  }
+
+  // confirmDialog : remplace le confirm() natif de hx-confirm (une seule confirmation, stylée, au clavier).
+  var confirmEl;
+  function confirmDialog(message, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      if (!confirmEl) {
+        confirmEl = document.createElement("dialog");
+        confirmEl.className = "menu confirm-dialog";
+        confirmEl.setAttribute("aria-labelledby", "cd-title");
+        confirmEl.innerHTML =
+          '<form method="dialog" class="stack"><h2 id="cd-title"></h2><p id="cd-body" class="muted"></p>' +
+          '<div class="row"><button class="btn btn-text" value="cancel" id="cd-cancel">Annuler</button>' +
+          '<button class="btn btn-filled" value="ok" id="cd-ok"></button></div></form>';
+        document.body.appendChild(confirmEl);
+      }
+      var ok = confirmEl.querySelector("#cd-ok");
+      confirmEl.querySelector("#cd-title").textContent = opts.title || "Confirmer";
+      confirmEl.querySelector("#cd-body").textContent = message || "";
+      ok.textContent = opts.confirmLabel || "Confirmer";
+      ok.className = "btn " + (opts.danger === false ? "btn-filled" : "btn-filled btn-danger-solid");
+      confirmEl.returnValue = "cancel";
+      confirmEl.addEventListener("close", function () { resolve(confirmEl.returnValue === "ok"); }, { once: true });
+      confirmEl.showModal();
+      confirmEl.querySelector("#cd-cancel").focus();
+    });
+  }
+  document.body.addEventListener("htmx:confirm", function (e) {
+    if (!e.detail.question) return;
+    e.preventDefault();
+    var src = e.detail.elt;
+    var danger = !!(src.closest && src.closest(".btn-danger"));
+    var label = src.dataset && src.dataset.confirmLabel;
+    if (!label && src.cloneNode) {
+      var c = src.cloneNode(true);
+      c.querySelectorAll(".icon").forEach(function (n) { n.remove(); });
+      label = c.textContent.trim();
+      if (label.length > 24) label = "";
+    }
+    confirmDialog(e.detail.question, { danger: danger, confirmLabel: label || (danger ? "Supprimer" : "Confirmer") })
+      .then(function (yes) { if (yes) e.detail.issueRequest(true); });
+  });
+
+  // Filtre de liste côté client : <input data-filter-list="#id"> masque les <li data-filter-item> sans correspondance.
+  document.addEventListener("input", function (e) {
+    var sel = e.target.dataset && e.target.dataset.filterList;
+    if (!sel) return;
+    var q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll(sel + " [data-filter-item]").forEach(function (li) {
+      var txt = li.textContent + " " + Array.prototype.map.call(li.querySelectorAll("input"), function (i) { return i.value; }).join(" ");
+      li.hidden = !!q && txt.toLowerCase().indexOf(q) < 0;
+    });
+  });
+
+  // Menu « Plus » (navigation mobile) : se ferme dès qu'on choisit une entrée ou un contrôle.
+  document.addEventListener("click", function (e) {
+    var more = document.getElementById("more-menu");
+    if (!more) return;
+    if (e.target.closest("[data-more]")) { more.showModal(); return; }
+    if (more.open && (e.target === more || e.target.closest("[data-more-close]"))) more.close();
+  });
+
+  // Boutons occupés pendant une requête htmx (anti double envoi) ; jamais sur les contrôles d'alerte.
+  function busyBtn(e, on) {
+    var el = e.detail.elt;
+    if (!el || !el.matches || el.closest("#alert-dialog")) return;
+    var btns = el.matches("button, input[type=submit]") ? [el]
+      : el.tagName === "FORM" ? Array.prototype.slice.call(el.querySelectorAll("button[type=submit], button:not([type])")) : [];
+    btns.forEach(function (b) { b.toggleAttribute("aria-busy", on); b.disabled = on; });
+  }
+  document.body.addEventListener("htmx:beforeRequest", function (e) { busyBtn(e, true); });
+  document.body.addEventListener("htmx:afterRequest", function (e) { busyBtn(e, false); });
+
+  // Erreurs de champ : un 422 FastAPI est rattaché au champ (aria-invalid + message lié).
+  function clearFieldErrors(form) {
+    form.querySelectorAll("[aria-invalid]").forEach(function (f) { f.removeAttribute("aria-invalid"); f.removeAttribute("aria-describedby"); });
+    form.querySelectorAll(".field-error").forEach(function (n) { n.remove(); });
+  }
+  function fieldErrors(xhr, el) {
+    var form = el.tagName === "FORM" ? el : el.closest && el.closest("form");
+    if (!form || xhr.status !== 422) return false;
+    var detail;
+    try { detail = JSON.parse(xhr.responseText).detail; } catch (x) { return false; }
+    if (!Array.isArray(detail)) return false;
+    clearFieldErrors(form);
+    var n = 0;
+    detail.forEach(function (d) {
+      var name = d.loc && d.loc[d.loc.length - 1];
+      var f = name && form.querySelector('[name="' + name + '"]');
+      if (!f) return;
+      var id = "err-" + name + "-" + (n++);
+      var msg = document.createElement("span");
+      msg.className = "field-error";
+      msg.id = id;
+      msg.textContent = d.msg;
+      f.setAttribute("aria-invalid", "true");
+      f.setAttribute("aria-describedby", id);
+      f.insertAdjacentElement("afterend", msg);
+    });
+    return n > 0;
   }
 
   function errorText(xhr) {
@@ -119,7 +232,8 @@
         });
         return;
       }
-      toast(errorText(d.xhr), true);
+      var shown = fieldErrors(d.xhr, el);
+      toast(shown ? "Certains champs sont invalides : voir le formulaire." : errorText(d.xhr), true);
       if (src.dataset.refresh) refresh(src.dataset.refresh);
     }
   });
@@ -284,7 +398,7 @@
   }
 
   window.SoundUI = {
-    toast: toast, hideToast: hideToast, groupCall: groupCall, selected: selected, refresh: refresh,
+    toast: toast, hideToast: hideToast, confirmDialog: confirmDialog, groupCall: groupCall, selected: selected, refresh: refresh,
   };
 
   // Message pré-enregistré : désactive le texte libre.

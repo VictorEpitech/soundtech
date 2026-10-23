@@ -1,10 +1,14 @@
-{% from "_macros.html" import active_toggle %}
+{% from "_macros.html" import active_toggle, empty %}
 <div class="row between">
   <div>
     <strong>Jours fériés français</strong>
     <p class="muted small">Calculés automatiquement (Pâques et dérivés comprises).</p>
   </div>
+{% if can_edit %}
   {{ active_toggle("/closures/settings", cal.observe_holidays, 'Fériés pris en compte', 'Fériés ignorés', '#closures', key='observe_holidays', method='put') }}
+{% else %}
+<span class="badge mono">{{ 'Fériés pris en compte' if cal.observe_holidays else 'Fériés ignorés' }}</span>
+{% endif %}
 </div>
 <details>
   <summary class="small">Fériés {{ cal.year }} et {{ cal.year + 1 }}</summary>
@@ -13,6 +17,7 @@
   </ul>
 </details>
 
+{% if can_edit %}
 <form class="row" hx-post="/closures" hx-ext="json-typed" data-json data-toast="Plage ajoutée" data-reset data-refresh="#closures" hx-swap="none">
   <label class="field grow"><span>Libellé</span><input type="text" name="label" required maxlength="100" placeholder="Vacances de Noël"></label>
   <label class="field"><span>Type</span>
@@ -22,17 +27,22 @@
   <label class="field"><span>Au (inclus)</span><input type="date" name="end_date" required></label>
   <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Ajouter</button>
 </form>
+{% endif %}
 
 <ul class="list">
   {% for c in cal.closures %}
   <li class="row between">
     <span><strong>{{ c.label }}</strong> <span class="badge mono">{{ c.kind }}</span><br><span class="small mono">{{ c.start_date }} → {{ c.end_date }}</span></span>
     <span class="row">
+{% if can_edit %}
       {{ active_toggle("/closures/" ~ c.id, c.is_active, 'Actif', 'Inactif', '#closures') }}
       <button class="btn btn-icon btn-danger" type="button" hx-delete="/closures/{{ c.id }}" hx-confirm="Supprimer {{ c.label }} ?" hx-swap="none" data-refresh="#closures" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>
+{% else %}
+<span class="badge mono">{{ 'Actif' if c.is_active else 'Inactif' }}</span>
+{% endif %}
     </span>
   </li>
   {% else %}
-  <li class="muted">Aucune plage saisie.</li>
+  {{ empty('Aucune plage saisie.', tag='li') }}
   {% endfor %}
 </ul>

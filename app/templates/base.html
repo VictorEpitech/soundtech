@@ -19,6 +19,7 @@
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/app.js" defer></script>
   <script src="/static/pwa.js" defer></script>
+  {% if user and user.role in ('admin', 'staff') %}<script src="/static/alerts.js" defer></script>{% endif %}
 </head>
 <body hx-ext="json-typed">
 <div id="offline-banner" class="offline-banner" role="status" aria-live="polite" hidden>
@@ -31,10 +32,19 @@
     <nav class="nav" aria-label="Navigation principale">
       <a href="/" {% if active == 'home' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">home</span><span>Accueil</span></a>
       <a href="/music" {% if active == 'music' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">music_note</span><span>Musique</span></a>
+      {% if user.role in ('admin', 'staff') %}
+      <a class="nav-alert" href="/alerts" data-alert-open aria-haspopup="dialog"><span class="icon" aria-hidden="true">emergency_home</span><span>Alerte</span><span class="mode-badge" aria-hidden="true">EXERCICE</span></a>
+      {% endif %}
       <a href="/announce" {% if active == 'announce' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">campaign</span><span>Annonces</span></a>
-      <a href="/alerts" {% if active == 'alerts' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">emergency_home</span><span>Alertes</span></a>
+      {% if user.role in ('admin', 'staff') %}
+      <a class="nav-extra" href="/planning" {% if active == 'planning' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">event_repeat</span><span>Planning</span></a>
+      <a class="nav-extra" href="/alerts" {% if active == 'alerts' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">history</span><span>Incidents</span></a>
+      {% endif %}
       {% if user.role == 'admin' %}
-      <a href="/admin" {% if active == 'admin' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">admin_panel_settings</span><span>Admin</span></a>
+      <a class="nav-extra" href="/admin" {% if active == 'admin' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">admin_panel_settings</span><span>Admin</span></a>
+      {% endif %}
+      {% if user.role in ('admin', 'staff') %}
+      <button class="nav-more" type="button" data-more aria-haspopup="dialog" aria-controls="more-menu"><span class="icon" aria-hidden="true">more_horiz</span><span>Plus</span></button>
       {% endif %}
     </nav>
     <div class="who">
@@ -45,12 +55,40 @@
       <button class="btn btn-text" type="button" data-logout title="Se déconnecter" aria-label="Se déconnecter"><span class="icon" aria-hidden="true">logout</span></button>
     </div>
   </header>
-{% if user.role in ('admin', 'staff') and active != 'alerts' %}
-  <a class="fab-alert" href="/alerts#alert-grid" aria-label="Alerte : ouvrir la grille des alertes de sécurité"><span class="icon" aria-hidden="true">emergency_home</span><span>Alerte</span></a>
+{% if user.role in ('admin', 'staff') %}
+  <dialog id="more-menu" class="menu more-menu" aria-label="Plus de pages">
+    <a class="more-alert" href="/alerts" data-alert-open data-more-close><span class="icon" aria-hidden="true">emergency_home</span>Lancer une alerte</a>
+    <a href="/planning" {% if active == 'planning' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">event_repeat</span>Planification</a>
+    <a href="/alerts" {% if active == 'alerts' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">history</span>Incidents</a>
+    {% if user.role == 'admin' %}<a href="/admin" {% if active == 'admin' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">admin_panel_settings</span>Administration</a>{% endif %}
+    <button class="btn btn-text" type="button" data-more-close>Fermer</button>
+  </dialog>
+  <div id="incident-banner" hx-get="/ui/alerts/active" hx-trigger="load, refresh" hx-swap="innerHTML" role="status" aria-live="polite"></div>
+  <dialog id="alert-dialog" class="menu alert-dialog" aria-labelledby="ad-title" data-alert-word="{{ alert_word }}" data-test-word="{{ test_word }}">
+    <form method="dialog" class="stack" id="ad-form" novalidate>
+      <p class="badge mono ad-mode" id="ad-mode"></p>
+      <h2 id="ad-title" tabindex="-1"></h2>
+      <p id="ad-message" class="ad-message"></p>
+      <p class="muted small" id="ad-help"></p>
+      <div id="ad-confirm-zone" class="stack">
+        <button class="btn btn-filled btn-alert ad-hold" type="button" id="ad-hold" aria-describedby="ad-hold-help"><span class="ad-hold-fill" aria-hidden="true"></span><span class="ad-hold-text"><span class="icon" aria-hidden="true">touch_app</span><span>Maintenir appuyé pour diffuser</span></span></button>
+        <p class="muted small" id="ad-hold-help">Appui long de 1,2 s, relâcher avant la fin pour annuler.</p>
+        <label class="field" id="ad-confirm-field"><span id="ad-confirm-label"></span>
+          <input type="text" id="ad-confirm" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        </label>
+      </div>
+      <p id="ad-status" class="ad-status" role="status" aria-live="polite" hidden></p>
+      <div class="row">
+        <button class="btn btn-text" type="button" id="ad-cancel">Annuler</button>
+        <a class="btn btn-tonal" id="ad-recap" href="/alerts" hidden>Voir le tableau de bord</a>
+        <button class="btn btn-filled btn-alert" type="submit" id="ad-send" disabled><span class="icon" aria-hidden="true">notifications_active</span><span id="ad-send-label"></span></button>
+      </div>
+    </form>
+  </dialog>
 {% endif %}
 {% endif %}
   <main class="page">{% block content %}{% endblock %}</main>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast-stack" aria-live="polite"></div>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {

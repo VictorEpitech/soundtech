@@ -39,13 +39,7 @@
   if (pushBtn && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window) {
     var pushIcon = pushBtn.querySelector(".icon");
     var pushLabel = pushBtn.querySelector(".push-label");
-    var toastEl = document.getElementById("toast");
-    var say = function (msg) {
-      if (!toastEl) return;
-      toastEl.textContent = msg;
-      toastEl.classList.add("show");
-      setTimeout(function () { toastEl.classList.remove("show"); }, 4000);
-    };
+    var say = function (msg) { if (window.SoundUI) window.SoundUI.toast(msg); };
     var render = function (on) {
       pushBtn.setAttribute("aria-pressed", on ? "true" : "false");
       pushBtn.title = on ? "Désactiver les notifications" : "Activer les notifications";

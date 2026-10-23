@@ -503,3 +503,58 @@ async def test_admin_ma_players_fragment(music_api, make_user, login_as, db) -> 
     async with db() as s:
         await s.execute(delete(Speaker).where(Speaker.ma_player_id == "zzz"))
         await s.commit()
+
+
+async def test_end_of_play_removes_played_items(fake_ma: FakeMA) -> None:
+    from app.ma.monitor import EndOfPlayDetector
+
+    det = EndOfPlayDetector(_client(fake_ma))
+    for iid in ("a", "b"):
+        await det.handle(
+            _qev("p1", "playing", repeat_mode="off", current_item={"queue_item_id": iid})
+        )
+    await det.handle(_qev("p1", "paused", repeat_mode="off", current_item={"queue_item_id": "b"}))
+    await det.handle(
+        _qev(
+            "p1",
+            "playing",
+            repeat_mode="off",
+            elapsed_time=179,
+            current_item={"queue_item_id": "b", "duration": 180},
+        )
+    )
+    assert await det.handle(_qev("p1", "idle", repeat_mode="off"))
+    dels = [a["item_id_or_index"] for c, a in fake_ma.cmds if c == "player_queues/delete_item"]
+    assert dels == ["a", "b"]
+    n = len(fake_ma.cmds)
+    await det.handle(_qev("p1", "playing", repeat_mode="off"))
+    await det.handle(_qev("p1", "idle", repeat_mode="off"))
+    assert [c for c, _ in fake_ma.cmds[n:]].count("player_queues/delete_item") == 0
+
+
+async def test_end_of_play_repeat_keeps_queue(fake_ma: FakeMA) -> None:
+    from app.ma.monitor import EndOfPlayDetector
+
+    det = EndOfPlayDetector(_client(fake_ma))
+    await det.handle(_qev("q", "playing", repeat_mode="all", current_item={"queue_item_id": "a"}))
+    assert not await det.handle(_qev("q", "idle", repeat_mode="all"))
+    assert all(c != "player_queues/delete_item" for c, _ in fake_ma.cmds)
+
+
+async def test_manual_stop_keeps_interrupted_item(fake_ma: FakeMA) -> None:
+    from app.ma.monitor import EndOfPlayDetector
+
+    det = EndOfPlayDetector(_client(fake_ma))
+    await det.handle(_qev("m", "playing", repeat_mode="off", current_item={"queue_item_id": "a"}))
+    await det.handle(
+        _qev(
+            "m",
+            "playing",
+            repeat_mode="off",
+            elapsed_time=30,
+            current_item={"queue_item_id": "b", "duration": 200},
+        )
+    )
+    await det.handle(_qev("m", "idle", repeat_mode="off"))  # Stop manuel au milieu de b
+    dels = [a["item_id_or_index"] for c, a in fake_ma.cmds if c == "player_queues/delete_item"]
+    assert dels == ["a"]  # b (interrompu) est conservé

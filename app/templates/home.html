@@ -3,11 +3,21 @@
 {% block content %}
 <h1>Bonjour{% if user.display_name %}, {{ user.display_name }}{% endif %}</h1>
 <p class="muted">{{ role_labels.get(user.role, user.role) }} · <span class="mono">{{ user.email }}</span></p>
+{% if user.role in ('admin', 'staff') %}
+<p><a class="btn btn-filled btn-alert home-alert" href="/alerts" data-alert-open aria-haspopup="dialog"><span class="icon" aria-hidden="true">emergency_home</span>Lancer une alerte</a></p>
+{% endif %}
 <div class="grid">
   <a class="card tile" href="/music"><span class="icon icon-lg" aria-hidden="true">music_note</span><h2>Musique</h2><p class="muted">Lecteurs, recherche, volume.</p></a>
   <a class="card tile" href="/announce"><span class="icon icon-lg" aria-hidden="true">campaign</span><h2>Annonces</h2><p class="muted">Diffuser un message sur les enceintes.</p></a>
+  {% if user.role in ('admin', 'staff') %}
+  <a class="card tile" href="/alerts"><span class="icon icon-lg" aria-hidden="true">history</span><h2>Alertes</h2><p class="muted">Incidents et récaps.</p></a>
+  <a class="card tile" href="/planning"><span class="icon icon-lg" aria-hidden="true">event_repeat</span><h2>Planification</h2><p class="muted">Programmations et fermetures.</p></a>
+  {% endif %}
   {% if user.role == 'admin' %}
   <a class="card tile" href="/admin"><span class="icon icon-lg" aria-hidden="true">admin_panel_settings</span><h2>Administration</h2><p class="muted">Utilisateurs, enceintes, messages.</p></a>
   {% endif %}
 </div>
+{% if user.role in ('admin', 'staff') %}
+<div id="home-summary" class="stack" hx-get="/ui/home/summary" hx-trigger="load, every 30s [document.visibilityState === 'visible']" aria-live="polite"></div>
+{% endif %}
 {% endblock %}

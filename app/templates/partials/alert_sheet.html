@@ -1,0 +1,22 @@
+{% from "_macros.html" import switch %}
+<dialog id="alert-sheet" class="menu alert-dialog alert-sheet" aria-labelledby="as-title">
+  <div class="stack">
+    <div class="row as-head">
+      <h2 id="as-title">Lancer une alerte</h2>
+      <button class="btn btn-icon btn-text" type="button" data-sheet-close aria-label="Fermer"><span class="icon" aria-hidden="true">close</span></button>
+    </div>
+    {{ switch('sheet-is-test', 'Mode exercice / test', 'sheet-mode-state', 'Désactivé : les alertes sont RÉELLES') }}
+    {% if not templates %}
+    <p class="muted">Aucun modèle d'alerte actif. Un administrateur peut en configurer dans Admin.</p>
+    {% else %}
+    <div class="alert-grid" aria-label="Types d'alerte">
+      {% for t in templates %}
+      <button type="button" class="alert-btn" data-type="{{ t.type }}" data-label="{{ t.label }}" data-title="{{ t.title }}" data-message="{{ t.message }}"{% if t.color %} style="--tone: {{ t.color }}; --on-tone: #fff"{% endif %}>
+        <span class="icon" aria-hidden="true">{{ t.icon or 'warning' }}</span>
+        <span class="alert-label">{{ t.label }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</dialog>

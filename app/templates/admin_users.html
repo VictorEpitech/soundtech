@@ -1,0 +1,16 @@
+{% extends "admin_base.html" %}
+{% block title %}Utilisateurs{% endblock %}
+{% block admin_content %}
+<section class="card">
+  <h2>Utilisateurs et rôles</h2>
+  <form class="row" hx-post="/admin/users" hx-ext="json-typed" data-json data-toast="Utilisateur créé" data-reset data-refresh="#users" hx-swap="none">
+    <label class="field grow"><span>Email</span><input type="email" name="email" required maxlength="320"></label>
+    <label class="field grow"><span>Nom</span><input type="text" name="display_name" maxlength="255"></label>
+    <label class="field"><span>Rôle</span>
+      <select name="role">{% for r in roles %}<option value="{{ r.value }}" {% if r.value == 'staff' %}selected{% endif %}>{{ role_labels[r.value] }}</option>{% endfor %}</select>
+    </label>
+    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">person_add</span>Ajouter</button>
+  </form>
+  <div id="users" hx-get="/ui/admin/users" hx-trigger="load, refresh"></div>
+</section>
+{% endblock %}

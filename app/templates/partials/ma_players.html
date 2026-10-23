@@ -1,3 +1,4 @@
+{% from "_macros.html" import empty %}
 {% if error %}
 <p class="status-failed"><span class="icon" aria-hidden="true">error</span> {{ error }}</p>
 {% else %}
@@ -25,7 +26,7 @@
     </div>
   </li>
   {% else %}
-  <li class="muted">Aucun lecteur Music Assistant détecté.</li>
+  {{ empty('Aucun lecteur Music Assistant détecté.', tag='li') }}
   {% endfor %}
 </ul>
 {% endif %}

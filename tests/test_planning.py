@@ -525,7 +525,9 @@ async def test_ui_pages(admin, db) -> None:
     sp = await _speaker(db)
     sc = await _mk(db, sp)
     await admin.post(f"/schedules/{sc.id}/run")
-    page = await admin.get("/admin/planning")
+    legacy = await admin.get("/admin/planning")
+    assert legacy.status_code == 301 and legacy.headers["location"] == "/planning"
+    page = await admin.get("/planning")
     assert page.status_code == 200 and "Planification" in page.text
     frag = await admin.get("/ui/planning/schedules")
     assert frag.status_code == 200 and sc.name in frag.text and 'name="days"' in frag.text

@@ -11,7 +11,7 @@
   {% if not templates %}
   <p class="muted">Aucun modèle d'alerte actif. Un administrateur peut en configurer dans Admin.</p>
   {% else %}
-  <div class="alert-grid" id="alert-grid" tabindex="-1" aria-label="Types d'alerte" data-alert-word="{{ alert_word }}" data-test-word="{{ test_word }}">
+  <div class="alert-grid" id="alert-grid" tabindex="-1" aria-label="Types d'alerte" >
     {% for t in templates %}
     <button type="button" class="alert-btn" data-type="{{ t.type }}" data-label="{{ t.label }}" data-title="{{ t.title }}" data-message="{{ t.message }}"{% if t.color %} style="--tone: {{ t.color }}; --on-tone: #fff"{% endif %}>
       <span class="icon" aria-hidden="true">{{ t.icon or 'warning' }}</span>
@@ -22,25 +22,10 @@
   {% endif %}
 </section>
 
-<dialog id="alert-dialog" class="menu alert-dialog" aria-labelledby="ad-title">
-  <form method="dialog" class="stack" id="ad-form">
-    <p class="badge mono ad-mode" id="ad-mode"></p>
-    <h2 id="ad-title"></h2>
-    <p id="ad-message" class="ad-message"></p>
-    <p class="muted small" id="ad-help"></p>
-    <label class="field" id="ad-confirm-field"><span id="ad-confirm-label"></span>
-      <input type="text" id="ad-confirm" autocomplete="off" autocapitalize="characters" spellcheck="false">
-    </label>
-    <div class="row">
-      <button class="btn btn-text" type="button" id="ad-cancel">Annuler</button>
-      <button class="btn btn-filled btn-danger" type="submit" id="ad-send" disabled><span class="icon" aria-hidden="true">notifications_active</span><span id="ad-send-label"></span></button>
-    </div>
-  </form>
-</dialog>
 
 <section class="card">
   <h2>Derniers évènements</h2>
   <div id="incidents" hx-get="/ui/alerts/list" hx-trigger="load, refresh" data-poll="5000"></div>
 </section>
 {% endblock %}
-{% block scripts %}<script src="/static/alerts.js" defer></script>{% endblock %}
+

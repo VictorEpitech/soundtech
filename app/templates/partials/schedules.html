@@ -1,4 +1,6 @@
-{% from "_macros.html" import active_toggle %}
+{% from "_macros.html" import active_toggle, empty %}
+{% if can_edit %}
+<details class="fold"><summary>Nouvelle planification</summary>
 <form class="stack" data-planning-form hx-post="/schedules" hx-ext="json-typed" data-json data-arrays="days,group_ids,speaker_ids" data-bools="is_test,respect_closures" data-ints="stop_volume" data-toast="Planification créée" data-reset data-refresh="#schedules" hx-swap="none">
   <div class="row">
     <label class="field grow"><span>Nom</span><input type="text" name="name" required maxlength="100"></label>
@@ -41,11 +43,11 @@
   <div data-show-action="announcement stop">
     <fieldset class="chips">
       <legend>Groupes</legend>
-      {% for g in groups %}<label class="chip"><input type="checkbox" name="group_ids" value="{{ g.id }}"><span>{{ g.name }}</span></label>{% else %}<p class="muted">Aucun groupe.</p>{% endfor %}
+      {% for g in groups %}<label class="chip"><input type="checkbox" name="group_ids" value="{{ g.id }}"><span>{{ g.name }}</span></label>{% else %}{{ empty('Aucun groupe.', tag='p') }}{% endfor %}
     </fieldset>
     <fieldset class="chips">
       <legend>Enceintes</legend>
-      {% for s in speakers %}<label class="chip"><input type="checkbox" name="speaker_ids" value="{{ s.id }}"><span>{{ s.name }}</span></label>{% else %}<p class="muted">Aucune enceinte.</p>{% endfor %}
+      {% for s in speakers %}<label class="chip"><input type="checkbox" name="speaker_ids" value="{{ s.id }}"><span>{{ s.name }}</span></label>{% else %}{{ empty('Aucune enceinte.', tag='p') }}{% endfor %}
     </fieldset>
   </div>
 
@@ -59,6 +61,8 @@
     <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Créer</button>
   </div>
 </form>
+</details>
+{% endif %}
 
 <ul class="list">
   {% for s in rows %}
@@ -79,12 +83,16 @@
       <div class="preview"></div>
     </details>
     <div class="row">
+{% if can_edit %}
       {{ active_toggle("/schedules/" ~ s.id, s.is_active, 'Actif', 'Inactif', '#schedules') }}
       <button class="btn btn-tonal" type="button" hx-post="/schedules/{{ s.id }}/run" hx-confirm="Exécuter « {{ s.name }} » maintenant ?" data-toast="Exécuté" hx-swap="none" data-refresh="#schedules"><span class="icon" aria-hidden="true">play_arrow</span>Exécuter maintenant</button>
       <button class="btn btn-icon btn-danger" type="button" hx-delete="/schedules/{{ s.id }}" hx-confirm="Supprimer la planification {{ s.name }} ?" hx-swap="none" data-refresh="#schedules" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>
+{% else %}
+<span class="badge mono">{{ 'Actif' if s.is_active else 'Inactif' }}</span>
+{% endif %}
     </div>
   </li>
   {% else %}
-  <li class="muted">Aucune planification.</li>
+  {{ empty('Aucune planification.', tag='li') }}
   {% endfor %}
 </ul>

@@ -8,7 +8,15 @@ from app.ui import router as ui_router
 
 pytestmark = pytest.mark.usefixtures("migrated_db")
 
-PAGES = ["/", "/music", "/announce", "/admin"]
+ADMIN_PAGES = [
+    "/admin",
+    "/admin/utilisateurs",
+    "/admin/enceintes",
+    "/admin/musique",
+    "/admin/annonces",
+    "/admin/alertes",
+]
+PAGES = ["/", "/music", "/announce", "/planning", *ADMIN_PAGES]
 FRAGMENTS = [
     "/ui/music/players",
     "/ui/music/search?q=x",
@@ -55,7 +63,7 @@ async def test_staff_access(client, make_user, login_as, fake_ma) -> None:
         assert (await client.get(url)).status_code == 200, url
     home = await client.get("/")
     assert 'href="/admin"' not in home.text
-    for url in ["/admin", "/ui/admin/users", "/ui/admin/speakers", "/ui/admin/presets"]:
+    for url in [*ADMIN_PAGES, "/ui/admin/users", "/ui/admin/speakers", "/ui/admin/presets"]:
         assert (await client.get(url)).status_code == 403, url
     assert (await client.get("/login")).status_code == 302
 
@@ -167,4 +175,91 @@ def test_incident_polling_does_not_replace_controls() -> None:
     from pathlib import Path
 
     html = (Path(__file__).resolve().parent.parent / "app/templates/alerts.html").read_text()
-    assert "every 5s" not in html and 'id="alert-dialog"' in html
+    assert "every 5s" not in html
+    base = (Path(__file__).resolve().parent.parent / "app/templates/base.html").read_text()
+    assert 'id="alert-dialog"' in base
+
+
+async def test_planning_read_only_for_staff(client, make_user, login_as) -> None:
+    await login_as(await make_user(Role.staff))
+    page = await client.get("/planning")
+    assert (
+        page.status_code == 200 and "Lecture seule" in page.text and 'href="/planning"' in page.text
+    )
+    assert 'href="/admin"' not in page.text
+    frag = await client.get("/ui/planning/schedules")
+    assert frag.status_code == 200 and "hx-post" not in frag.text
+    closures = await client.get("/ui/planning/closures")
+    assert closures.status_code == 200 and "hx-post" not in closures.text
+    assert (await client.get("/ui/planning/runs")).status_code == 200
+    assert (await client.get("/admin/planning")).status_code == 403
+
+
+async def test_admin_planning_editable_and_nav(client, make_user, login_as) -> None:
+    await login_as(await make_user(Role.admin))
+    frag = await client.get("/ui/planning/schedules")
+    assert 'hx-post="/schedules"' in frag.text
+    sub = await client.get("/admin/enceintes")
+    assert 'aria-label="Rubriques d\'administration"' in sub.text
+    assert 'aria-current="page"' in sub.text and 'id="more-menu"' in sub.text
+    assert "data-alert-open" in sub.text and 'class="nav-more"' in sub.text
+
+
+async def test_home_summary_fragment(client, make_user, login_as, db) -> None:
+    from sqlalchemy import delete
+
+    from app.models import Incident
+
+    assert (await client.get("/ui/home/summary", headers={"HX-Request": "true"})).status_code == 401
+    await login_as(await make_user(Role.staff))
+    home = (await client.get("/")).text
+    assert "data-alert-open" in home and 'hx-get="/ui/home/summary"' in home
+    frag = await client.get("/ui/home/summary")
+    assert frag.status_code == 200
+    for label in ("Accès rapides", "État du système", "À venir", "Dernières annonces"):
+        assert label in frag.text
+    async with db() as s:
+        await s.execute(delete(Incident))
+        await s.commit()
+    assert "Incident en cours" not in (await client.get("/ui/home/summary")).text
+    async with db() as s:
+        s.add(Incident(type="incendie", title="Feu", message="m", status="sent", is_test=False))
+        await s.commit()
+    assert "Incident en cours" in (await client.get("/ui/home/summary")).text
+
+
+async def test_announce_page_flow_contract(client, make_user, login_as) -> None:
+    await login_as(await make_user(Role.staff))
+    html = (await client.get("/announce")).text
+    assert "hx-confirm" not in html
+    assert (
+        'id="send-help"' in html
+        and 'id="send-status"' in html
+        and "<summary>Filtres</summary>" in html
+    )
+    js = (await client.get("/static/announce.js")).text
+    assert "data-replay" in js and "STATUS_FR" in js and "htmx:confirm" not in js
+
+
+async def test_lot678_contracts(client, make_user, login_as, db, fake_ma) -> None:
+    from sqlalchemy import delete, select
+
+    from app.models import Incident
+
+    await login_as(await make_user(Role.admin))
+    async with db() as s:
+        await s.execute(delete(Incident))
+        s.add(Incident(type="incendie", title="Feu", message="m", status="sent", is_test=False))
+        await s.commit()
+    music = (await client.get("/music")).text
+    assert 'id="search-target"' in music and "group-bar" in music
+    css = (await client.get("/static/app.css")).text
+    assert ".group-bar { position: sticky" in css
+    async with db() as s:
+        inc = await s.scalar(select(Incident).limit(1))
+    dash = (await client.get(f"/alerts/{inc.id}")).text
+    assert 'class="actionbar"' in dash and dash.count("/static/alerts.js") == 1
+    assert "Relances automatiques</summary>" in dash
+    more = (await client.get("/")).text
+    assert 'class="more-alert"' in more and "data-more-close" in more
+    assert "Nouvelle enceinte" in (await client.get("/admin/enceintes")).text

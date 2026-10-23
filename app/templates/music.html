@@ -3,16 +3,26 @@
 {% block content %}
 <h1>Musique</h1>
 <section class="card">
+  <h2>Recherche</h2>
+  <label class="field"><span>Titre, artiste, album, playlist…</span><input type="search" id="search-q" maxlength="200" autocomplete="off"></label>
+  <p class="muted small" id="search-target" role="status">Aucun lecteur sélectionné : cochez-en dans « Lecteurs ».</p>
+  <div id="results" class="results" aria-live="polite"></div>
+</section>
+<section class="card">
   <h2>Scènes</h2>
   {% if scenes %}
   <div class="scene-grid" id="scenes">
     {% for sc in scenes %}
-    <button class="scene-btn" type="button" data-scene="{{ sc.id }}"{% if sc.color %} style="--tone: {{ sc.color }}"{% endif %}>
+    <button class="scene-btn" type="button" data-scene="{{ sc.id }}"{% if incident_active %} disabled aria-describedby="scene-block"{% endif %}{% if sc.color %} style="--tone: {{ sc.color }}"{% endif %}>
       <span class="icon" aria-hidden="true">{{ sc.icon or 'queue_music' }}</span>{{ sc.name }}
     </button>
     {% endfor %}
   </div>
+  {% if incident_active %}
+  <p class="badge mono" id="scene-block"><span class="icon icon-sm" aria-hidden="true">block</span> Scènes bloquées : un incident d'alerte est en cours. <a href="/alerts/{{ incident_active.id }}">Voir l'incident</a></p>
+  {% else %}
   <p class="muted small">Un clic lance la scène (volume puis lecture). Bloqué pendant un incident d'alerte.</p>
+  {% endif %}
   {% else %}
   <p class="muted">Aucune scène.{% if user and user.role == 'admin' %} Créez-en dans <a href="/admin">Admin → Scènes</a>.{% endif %}</p>
   {% endif %}
@@ -45,12 +55,6 @@
   <div id="queue" hx-get="/ui/music/queue" hx-trigger="refresh, every 5s [!document.hidden && !document.querySelector('#queue .media:focus')]" hx-swap="innerHTML" hx-indicator="#queue">
     {% include "partials/queue.html" %}
   </div>
-</section>
-<section class="card">
-  <h2>Recherche</h2>
-  <label class="field"><span>Titre, artiste, album, playlist…</span><input type="search" id="search-q" maxlength="200" autocomplete="off"></label>
-  <p class="muted small">La lecture est lancée sur les lecteurs cochés ci-dessus.</p>
-  <div id="results" class="results" aria-live="polite"></div>
 </section>
 <dialog id="play-menu" class="menu" aria-labelledby="play-menu-title">
   <p class="mono" id="play-menu-title"></p>

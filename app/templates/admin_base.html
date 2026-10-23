@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Administration</h1>
+<nav class="subnav" aria-label="Rubriques d'administration">
+  <a href="/admin" {% if section == 'index' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">dashboard</span>Récap</a>
+  {% for url, key, ico, label in sections %}
+  <a href="{{ url }}" {% if section == key %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">{{ ico }}</span>{{ label }}</a>
+  {% endfor %}
+  <a href="/planning"><span class="icon" aria-hidden="true">event_repeat</span>Planification</a>
+</nav>
+{% block admin_content %}{% endblock %}
+{% endblock %}

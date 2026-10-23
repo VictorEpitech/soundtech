@@ -4,8 +4,9 @@
 {% block content %}
 <div class="row between">
   <h1>Planification</h1>
-  <a class="btn btn-text" href="/admin"><span class="icon" aria-hidden="true">arrow_back</span>Administration</a>
+  {% if can_edit %}<a class="btn btn-text" href="/admin"><span class="icon" aria-hidden="true">arrow_back</span>Administration</a>{% endif %}
 </div>
+{% if not can_edit %}<p class="badge mono"><span class="icon icon-sm" aria-hidden="true">visibility</span> Lecture seule : seuls les administrateurs modifient la planification.</p>{% endif %}
 <p class="muted small">Le worker vérifie les échéances chaque minute. Une échéance manquée de plus de 5 minutes n'est pas rattrapée (journal : « missed »). Jamais pendant une alerte en cours.</p>
 
 <section class="card">

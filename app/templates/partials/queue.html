@@ -6,7 +6,7 @@
 {% set base = '/music/players/' ~ player_id ~ '/queue' %}
 <div class="row between">
   <span class="muted small">{{ queue['items'] | length }} élément(s)</span>
-  <button class="btn btn-text btn-danger" type="button" hx-post="{{ base }}/clear" hx-swap="none" hx-confirm="Vider la file d'attente ?" data-refresh="#queue"><span class="icon" aria-hidden="true">delete_sweep</span>Vider</button>
+  <button class="btn btn-text btn-danger" type="button" hx-post="{{ base }}/clear" hx-swap="none" hx-confirm="Vider la file d'attente ?" data-confirm-label="Vider" data-refresh="#queue"><span class="icon" aria-hidden="true">delete_sweep</span>Vider</button>
 </div>
 <ul class="list media-list">
   {% for i in queue['items'] %}

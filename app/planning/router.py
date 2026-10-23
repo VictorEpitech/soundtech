@@ -247,6 +247,30 @@ async def next_runs(
         return []
 
 
+async def upcoming(session: AsyncSession, limit: int = 3) -> list[dict[str, Any]]:
+    """Prochaines exécutions des planifications actives : une requête fermetures, horizon 60 j."""
+    now = datetime.now(UTC)
+    rows = list(await session.scalars(select(Schedule).where(Schedule.is_active.is_(True))))
+    if not rows:
+        return []
+    last = now.date() + timedelta(days=60)
+    for sc in rows:
+        if sc.once_date is not None:
+            last = max(last, sc.once_date + timedelta(days=3))
+    is_closed = None
+    if any(sc.respect_closures for sc in rows):
+        is_closed = await service.closure_checker(session, now.date() - timedelta(days=2), last)
+    res = []
+    for sc in rows:
+        try:
+            nxt = next_occurrences(sc, now, 1, is_closed if sc.respect_closures else None)
+        except ValueError:
+            continue
+        if nxt:
+            res.append(out(sc, nxt[0]))
+    return sorted(res, key=lambda r: r["next_run"])[:limit]
+
+
 def _times(sc: Schedule, runs: list[datetime]) -> list[dict[str, str]]:
     tz = load_tz(sc.timezone)
     return [

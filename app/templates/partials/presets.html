@@ -1,4 +1,4 @@
-{% from "_macros.html" import active_toggle %}
+{% from "_macros.html" import active_toggle, empty %}
 <ul class="list">
   {% for p in rows %}
   <li>
@@ -13,6 +13,6 @@
     </div>
   </li>
   {% else %}
-  <li class="muted">Aucun message.</li>
+  {{ empty('Aucun message.', tag='li') }}
   {% endfor %}
 </ul>

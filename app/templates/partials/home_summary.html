@@ -1,0 +1,48 @@
+{% from "_macros.html" import status_badge, empty %}
+{% if active_incident %}
+<a class="card card-alert tile-incident" href="/alerts/{{ active_incident.id }}">
+  <span class="icon icon-lg" aria-hidden="true">emergency_home</span>
+  <div><h2>{{ 'Diffusion en échec' if active_incident.status == 'failed' else ('Exercice en cours' if active_incident.is_test else 'Incident en cours') }}</h2>
+  <p>{{ active_incident.title }} · ouvrir le tableau de bord</p></div>
+</a>
+{% endif %}
+<section class="card" aria-labelledby="h-quick">
+  <h2 id="h-quick">Accès rapides</h2>
+  <div class="row">
+    <a class="btn btn-filled" href="/announce"><span class="icon" aria-hidden="true">campaign</span>Nouvelle annonce</a>
+    {% for sc in scenes %}
+    <button class="btn btn-tonal" type="button" hx-post="/scenes/{{ sc.id }}/launch" hx-swap="none" data-toast="Scène « {{ sc.name }} » lancée"><span class="icon" aria-hidden="true">{{ sc.icon or 'queue_music' }}</span>{{ sc.name }}</button>
+    {% endfor %}
+  </div>
+</section>
+<section class="card" aria-labelledby="h-health">
+  <h2 id="h-health">État du système</h2>
+  <ul class="list health">
+    {% for h in health %}
+    <li class="row between"><span>{{ h.name }}</span>
+      <span class="badge mono {{ 'status-done' if h.ok else 'status-failed' }}"><span class="icon icon-sm" aria-hidden="true">{{ 'check_circle' if h.ok else 'error' }}</span> {% if h.cfg %}{{ 'Configuré' if h.ok else 'Non configuré' }}{% else %}{{ 'OK' if h.ok else 'Indisponible' }}{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+<section class="card" aria-labelledby="h-next">
+  <h2 id="h-next">À venir</h2>
+  <ul class="list">
+    {% for r in upcoming %}
+    <li class="row between"><span><strong>{{ r.name }}</strong> <span class="muted small">{{ action_labels.get(r.action, r.action) }}</span></span><span class="mono small">{{ r.next_run[:16] | replace('T', ' ') }} UTC</span></li>
+    {% else %}
+    {{ empty('Aucune planification à venir.', tag='li') }}
+    {% endfor %}
+  </ul>
+  <p><a class="btn btn-text" href="/planning">Voir la planification</a></p>
+</section>
+<section class="card" aria-labelledby="h-last">
+  <h2 id="h-last">Dernières annonces</h2>
+  <ul class="list">
+    {% for a in announcements %}
+    <li class="row between"><span>{{ a.text[:80] }}</span>{{ status_badge(a.status) }}</li>
+    {% else %}
+    {{ empty('Aucune annonce.', tag='li') }}
+    {% endfor %}
+  </ul>
+  {% if last_incident and not active_incident %}<p class="muted small">Dernier incident : {{ last_incident.title }}{% if last_incident.is_test %} (exercice){% endif %}, {{ last_incident.created_at.strftime('%d/%m %H:%M') if last_incident.created_at else '' }} · <a href="/alerts/{{ last_incident.id }}">récap</a></p>{% endif %}
+</section>

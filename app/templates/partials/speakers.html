@@ -1,21 +1,26 @@
-{% from "_macros.html" import active_toggle %}
+{% from "_macros.html" import active_toggle, empty %}
 <ul class="list">
   {% for s in rows %}
-  <li>
+  <li data-filter-item>
     <form class="grid-form" hx-patch="/speakers/{{ s.id }}" hx-swap="none" data-json data-refresh="#speakers" data-toast="Enceinte mise à jour">
       <p class="mono muted small span-all">{{ s.entity_id }}</p>
       <label class="field"><span>Nom</span><input type="text" name="name" value="{{ s.name }}" required maxlength="255"></label>
+      <details class="fold span-all"><summary>Avancé (groupe, notify_service, ma_player_id)</summary>
+<div class="grid-form">
       <label class="field"><span>Groupe</span><input type="text" name="group" value="{{ s.group or '' }}" maxlength="100"></label>
       <label class="field"><span>notify_service</span><input class="mono" type="text" name="notify_service" value="{{ s.notify_service or '' }}" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
       <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" value="{{ s.ma_player_id or '' }}" pattern="\S(.*\S)?"></label>
+</div>
+      </details>
       <button class="btn btn-tonal" type="submit"><span class="icon" aria-hidden="true">save</span>Enregistrer</button>
     </form>
     <div class="row">
+        <button class="btn btn-tonal" type="button" hx-post="/announcements" hx-ext="json-typed" data-json data-arrays="speaker_ids" data-bools="is_test" hx-vals='{"speaker_ids": "{{ s.id }}", "text": "Test enceinte {{ s.name | replace('"', '') | replace("'", ' ') | replace('\\', '') }}.", "is_test": "true"}' hx-confirm="Jouer un son de test sur {{ s.name }} ?" hx-swap="none" data-toast="Test envoyé à {{ s.name }}"><span class="icon" aria-hidden="true">volume_up</span>Tester</button>
         {{ active_toggle("/speakers/" ~ s.id, s.is_active, 'Active', 'Inactive', '#speakers') }}
         <button class="btn btn-icon btn-danger" type="button" hx-delete="/speakers/{{ s.id }}" hx-confirm="Supprimer {{ s.name }} ?" hx-swap="none" data-refresh="#speakers" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>
     </div>
   </li>
   {% else %}
-  <li class="muted">Aucune enceinte.</li>
+  {{ empty('Aucune enceinte.', tag='li') }}
   {% endfor %}
 </ul>
