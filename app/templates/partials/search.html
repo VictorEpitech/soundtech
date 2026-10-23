@@ -3,7 +3,7 @@
 <p class="muted">Aucun résultat pour « {{ q }} ».</p>
 {% else %}
 {% for label, items in groups %}
-<h3 class="mono">{{ label }}</h3>
+<h3 class="results-title">{{ label }}</h3>
 <ul class="list media-list">
   {% for i in items %}
   <li>
@@ -11,9 +11,10 @@
       <img class="cover" src="{{ i.image or '/static/cover.svg' }}" alt="" loading="lazy" width="48" height="48">
       <span class="media-text">
         <strong>{{ i.name }}</strong>
-        {% if i.artists %}<span class="muted small">{{ i.artists | join(', ') }}</span>{% endif %}
+        {% set sub = (i.artists or []) | select | join(', ') %}{% set alb = i.album if i.album is string else (i.album.name if i.album and i.album.name else '') %}
+        {% if sub or alb %}<span class="muted small media-sub">{{ sub }}{% if sub and alb %} · {% endif %}{{ alb }}</span>{% endif %}
       </span>
-      <span class="icon" aria-hidden="true">more_vert</span>
+      <span class="icon media-more" aria-hidden="true">more_vert</span>
     </button>
   </li>
   {% endfor %}
