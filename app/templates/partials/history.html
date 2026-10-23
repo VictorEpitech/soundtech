@@ -1,3 +1,4 @@
+{% from "_macros.html" import status_badge %}
 <div data-page="{{ page }}">
 {% if not rows %}
 <p class="muted">Aucune annonce.</p>
@@ -10,20 +11,20 @@
   {% for a in rows %}
   <tr>
     <td class="mono">{{ a.created_at[:16] | replace('T', ' ') if a.created_at else '' }}</td>
-    <td><span class="badge mono status-{{ a.status }}">{{ a.status }}</span>{% if a.is_test %} <span class="badge mono">TEST</span>{% endif %}</td>
+    <td>{{ status_badge(a.status) }}{% if a.is_test %} <span class="badge mono">TEST</span>{% endif %}</td>
     <td>{{ a.text }}</td>
     <td class="small">{{ a.author_email or '' }}</td>
     <td>{{ a.targets | length }}</td>
-    <td><button class="btn btn-icon btn-text" type="button" title="Détail" aria-label="Détail" hx-get="/ui/announce/{{ a.id }}" hx-target="#detail-body" hx-swap="innerHTML"><span class="icon">info</span></button></td>
+    <td><button class="btn btn-icon btn-text" type="button" title="Détail" aria-label="Détail" hx-get="/ui/announce/{{ a.id }}" hx-target="#detail-body" hx-swap="innerHTML"><span class="icon" aria-hidden="true">info</span></button></td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
 <div class="row between">
-  <button class="btn btn-tonal" type="button" {% if page <= 1 %}disabled{% else %}hx-get="/ui/announce/history?page={{ page - 1 }}" hx-include="#hist-filters" hx-target="#history"{% endif %}><span class="icon">chevron_left</span>Précédent</button>
+  <button class="btn btn-tonal" type="button" {% if page <= 1 %}disabled{% else %}hx-get="/ui/announce/history?page={{ page - 1 }}" hx-include="#hist-filters" hx-target="#history"{% endif %}><span class="icon" aria-hidden="true">chevron_left</span>Précédent</button>
   <span class="muted small">Page {{ page }} / {{ pages }}</span>
-  <button class="btn btn-tonal" type="button" {% if page >= pages %}disabled{% else %}hx-get="/ui/announce/history?page={{ page + 1 }}" hx-include="#hist-filters" hx-target="#history"{% endif %}>Suivant<span class="icon">chevron_right</span></button>
+  <button class="btn btn-tonal" type="button" {% if page >= pages %}disabled{% else %}hx-get="/ui/announce/history?page={{ page + 1 }}" hx-include="#hist-filters" hx-target="#history"{% endif %}>Suivant<span class="icon" aria-hidden="true">chevron_right</span></button>
 </div>
 {% endif %}
 </div>

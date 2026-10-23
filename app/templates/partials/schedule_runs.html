@@ -1,3 +1,4 @@
+{% from "_macros.html" import status_badge %}
 {% if not rows %}
 <p class="muted">Aucune exécution.</p>
 {% else %}
@@ -9,7 +10,7 @@
   <tr>
     <td class="mono">{{ r.scheduled_for[:16] | replace('T', ' ') }}</td>
     <td>{{ r.schedule_name }}{% if r.trigger == 'manual' %} <span class="badge mono">manuel</span>{% endif %}</td>
-    <td><span class="badge mono status-{{ r.status }}">{{ r.status }}</span></td>
+    <td>{{ status_badge(r.status) }}</td>
     <td class="small">{{ r.detail or '' }}</td>
   </tr>
   {% endfor %}

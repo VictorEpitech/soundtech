@@ -13,7 +13,7 @@
         <strong>{{ i.name }}</strong>
         {% if i.artists %}<span class="muted small">{{ i.artists | join(', ') }}</span>{% endif %}
       </span>
-      <span class="icon">more_vert</span>
+      <span class="icon" aria-hidden="true">more_vert</span>
     </button>
   </li>
   {% endfor %}

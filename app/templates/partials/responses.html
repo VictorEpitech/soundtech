@@ -1,8 +1,9 @@
+{% from "_macros.html" import status_badge %}
 {% set c = data.counts %}
 <div class="counters">
-  <span class="badge mono status-done">En sécurité (campus) : {{ c.safe_campus }}</span>
-  <span class="badge mono status-done">En sécurité (hors campus) : {{ c.safe_offsite }}</span>
-  <span class="badge mono status-failed">En danger : {{ c.danger }}</span>
+  <span class="badge mono status-done"><span class="icon icon-sm" aria-hidden="true">check_circle</span> En sécurité (campus) : {{ c.safe_campus }}</span>
+  <span class="badge mono status-done"><span class="icon icon-sm" aria-hidden="true">check_circle</span> En sécurité (hors campus) : {{ c.safe_offsite }}</span>
+  <span class="badge mono status-failed"><span class="icon icon-sm" aria-hidden="true">warning</span> En danger : {{ c.danger }}</span>
   <span class="badge mono">Répondants : {{ c.responded }}</span>
   {% if data.roster.configured %}<span class="badge mono">Sans réponse : {{ c.not_responded }} / {{ c.roster_total }}</span>{% endif %}
 </div>
@@ -20,7 +21,7 @@
       <li class="resp resp-{{ r.status }}">
         <div class="row between">
           <strong>{{ r.name or r.email or r.aad_id }}</strong>
-          <span class="badge mono {{ 'status-failed' if r.status == 'danger' else 'status-done' }}">{{ r.status }}</span>
+          {{ status_badge(r.status) }}
         </div>
         {% if r.email %}<p class="muted small">{{ r.email }}</p>{% endif %}
         {% if r.text %}<p>{{ r.text }}</p>{% endif %}

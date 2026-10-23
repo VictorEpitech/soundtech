@@ -80,3 +80,25 @@ async def test_no_client_side_alert_blocking(client) -> None:
     assert "is-offline #ad-send" not in css and "is-offline .fab-alert" not in css
     assert "disabled" not in js and "pointer-events" not in js
     assert "no-store" in js
+
+
+def test_fonts_self_hosted_and_precached() -> None:
+    css = (ROOT / "static/fonts.css").read_text()
+    urls = re.findall(r"url\((/static/fonts/[^)]+)\)", css)
+    assert urls and all((ROOT / u.lstrip("/")).is_file() for u in urls)
+    assert set(urls) <= set(pwa.shell_assets())
+    assert "/static/fonts.css" in pwa.shell_assets()
+    assert (ROOT / "static/fonts/LICENSES.md").is_file()
+
+
+async def test_no_external_font_hosts(client) -> None:
+    html = (await client.get("/offline")).text
+    assert "googleapis" not in html and "gstatic" not in html
+    assert "/static/fonts.css" in html
+
+
+async def test_icons_hidden_and_status_labels(client, make_user, login_as) -> None:
+    await login_as(await make_user(Role.staff))
+    html = (await client.get("/alerts")).text
+    assert not re.search(r'<span class="icon[^"]*">', html)
+    assert 'role="switch"' in html and 'aria-describedby="mode-state"' in html

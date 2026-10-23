@@ -1,14 +1,15 @@
+{% from "_macros.html" import active_toggle %}
 <ul class="list">
   {% for p in rows %}
   <li>
     <form class="stack" hx-patch="/presets/{{ p.id }}" hx-swap="none" data-json data-refresh="#presets" data-toast="Message mis à jour">
       <label class="field"><span>Titre</span><input type="text" name="title" value="{{ p.title }}" required maxlength="255"></label>
       <label class="field"><span>Texte</span><textarea name="text" rows="2" required maxlength="1000">{{ p.text }}</textarea></label>
-      <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+      <button class="btn btn-tonal" type="submit"><span class="icon" aria-hidden="true">save</span>Enregistrer</button>
     </form>
     <div class="row">
-        <button class="btn {{ 'btn-tonal' if p.is_active else 'btn-text' }}" type="button" hx-patch="/presets/{{ p.id }}" hx-vals='{"is_active": {{ 'false' if p.is_active else 'true' }}}' data-json data-ints="shift" hx-swap="none" data-refresh="#presets"><span class="icon">{{ 'toggle_on' if p.is_active else 'toggle_off' }}</span>{{ 'Actif' if p.is_active else 'Inactif' }}</button>
-        <button class="btn btn-icon btn-danger" type="button" hx-delete="/presets/{{ p.id }}" hx-confirm="Supprimer ce message ?" hx-swap="none" data-refresh="#presets" title="Supprimer"><span class="icon">delete</span></button>
+        {{ active_toggle("/presets/" ~ p.id, p.is_active, 'Actif', 'Inactif', '#presets') }}
+        <button class="btn btn-icon btn-danger" type="button" hx-delete="/presets/{{ p.id }}" hx-confirm="Supprimer ce message ?" hx-swap="none" data-refresh="#presets" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>
     </div>
   </li>
   {% else %}

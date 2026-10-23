@@ -2,7 +2,7 @@
 {% block title %}Administration{% endblock %}
 {% block content %}
 <h1>Administration</h1>
-<p><a class="btn btn-tonal" href="/admin/planning"><span class="icon">event_repeat</span>Planification</a></p>
+<p><a class="btn btn-tonal" href="/admin/planning"><span class="icon" aria-hidden="true">event_repeat</span>Planification</a></p>
 
 <section class="card">
   <h2>Utilisateurs et rôles</h2>
@@ -12,7 +12,7 @@
     <label class="field"><span>Rôle</span>
       <select name="role">{% for r in roles %}<option value="{{ r.value }}" {% if r.value == 'staff' %}selected{% endif %}>{{ role_labels[r.value] }}</option>{% endfor %}</select>
     </label>
-    <button class="btn btn-filled" type="submit"><span class="icon">person_add</span>Ajouter</button>
+    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">person_add</span>Ajouter</button>
   </form>
   <div id="users" hx-get="/ui/admin/users" hx-trigger="load, refresh"></div>
 </section>
@@ -25,7 +25,7 @@
     <label class="field"><span>Groupe</span><input type="text" name="group" maxlength="100"></label>
     <label class="field"><span>notify_service</span><input class="mono" type="text" name="notify_service" placeholder="notify.alexa_media_salon" pattern="[a-z0-9_]+\.[a-z0-9_]+"></label>
     <label class="field"><span>ma_player_id</span><input class="mono" type="text" name="ma_player_id" pattern="\S(.*\S)?"></label>
-    <button class="btn btn-filled" type="submit"><span class="icon">add</span>Ajouter</button>
+    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Ajouter</button>
   </form>
   <div id="speakers" hx-get="/ui/admin/speakers" hx-trigger="load, refresh"></div>
   <h3>Lecteurs Music Assistant détectés</h3>
@@ -60,7 +60,7 @@
     <label class="field grow"><span>Langue par défaut</span>
       <select name="lang"><option value="">Langue de l'enceinte</option>{% for l in langs %}<option value="{{ l }}" {% if l == defaults.lang %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
     </label>
-    <button class="btn btn-filled" type="submit"><span class="icon">save</span>Enregistrer</button>
+    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">save</span>Enregistrer</button>
   </form>
 </section>
 
@@ -69,7 +69,7 @@
   <form class="stack" hx-post="/presets" hx-ext="json-typed" data-json data-toast="Message créé" data-reset data-refresh="#presets" hx-swap="none">
     <label class="field"><span>Titre</span><input type="text" name="title" required maxlength="255"></label>
     <label class="field"><span>Texte</span><textarea name="text" rows="2" required maxlength="1000"></textarea></label>
-    <button class="btn btn-filled" type="submit"><span class="icon">add</span>Ajouter</button>
+    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Ajouter</button>
   </form>
   <div id="presets" hx-get="/ui/admin/presets" hx-trigger="load, refresh"></div>
 </section>

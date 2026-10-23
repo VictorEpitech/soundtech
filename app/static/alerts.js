@@ -62,30 +62,37 @@
   el("ad-confirm").addEventListener("input", validate);
   el("ad-cancel").addEventListener("click", function () { dlg.close(); });
 
-  el("ad-form").addEventListener("submit", async function (e) {
-    e.preventDefault();
-    if (busy || el("ad-send").disabled) return;
-    busy = true;
-    validate();
+  // Envoi : en cas d'échec le toast d'erreur reste affiché avec une action « Réessayer » (même charge utile).
+  async function send(payload) {
     var toast = window.SoundUI.toast;
+    var retry = { action: { label: "Réessayer", run: function () { send(payload); } } };
     try {
       var r = await fetch("/incidents/from-template", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: current.type, is_test: current.test, confirm: word() }),
+        body: JSON.stringify(payload),
       });
-      if (r.ok) toast(current.test ? "Exercice lancé" : "Alerte diffusée");
+      if (r.ok) toast(payload.is_test ? "Exercice lancé" : "Alerte diffusée");
       else {
-        var msg = "Erreur " + r.status;
-        try { var d = (await r.json()).detail; if (typeof d === "string") msg = d; } catch (x) { /* non JSON */ }
-        toast(msg, true);
+        var msg = "Alerte NON envoyée : erreur " + r.status;
+        try { var d = (await r.json()).detail; if (typeof d === "string") msg = "Alerte NON envoyée : " + d; } catch (x) { /* non JSON */ }
+        toast(msg, true, retry);
       }
     } catch (err) {
-      toast("Serveur injoignable", true);
+      toast("Alerte NON envoyée : serveur injoignable", true, retry);
     }
+    window.SoundUI.refresh("#incidents");
+  }
+
+  el("ad-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    if (busy || el("ad-send").disabled) return;
+    busy = true;
+    validate();
+    var payload = { type: current.type, is_test: current.test, confirm: word() };
+    await send(payload);
     busy = false;
     dlg.close();
-    window.SoundUI.refresh("#incidents");
   });
 })();

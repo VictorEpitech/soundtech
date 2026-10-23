@@ -50,8 +50,8 @@
     <label class="check"><input type="checkbox" name="is_test" value="true"><span>Ceci est un test</span></label>
     {% if volume_level %}<label class="check"><input type="checkbox" name="force_volume" value="true" checked><span>Forcer le volume ({{ volume_level }} %)</span></label>{% endif %}
     <div class="row">
-      <button class="btn btn-tonal" type="button" id="preview-btn" disabled><span class="icon">visibility</span>Prévisualiser</button>
-      <button class="btn btn-filled" type="submit" id="send-btn" disabled><span class="icon">send</span>Envoyer</button>
+      <button class="btn btn-tonal" type="button" id="preview-btn" disabled><span class="icon" aria-hidden="true">visibility</span>Prévisualiser</button>
+      <button class="btn btn-filled" type="submit" id="send-btn" disabled><span class="icon" aria-hidden="true">send</span>Envoyer</button>
     </div>
   </form>
 </section>
@@ -65,7 +65,7 @@
     <ul class="list" id="pv-warnings" hidden></ul>
     <div class="row">
       <button class="btn btn-text" type="button" id="pv-cancel">Fermer</button>
-      <button class="btn btn-filled" type="button" id="pv-send"><span class="icon">send</span>Envoyer</button>
+      <button class="btn btn-filled" type="button" id="pv-send"><span class="icon" aria-hidden="true">send</span>Envoyer</button>
     </div>
   </div>
 </dialog>
@@ -76,7 +76,7 @@
       <label class="field"><span>Du</span><input type="date" name="date_from"></label>
       <label class="field"><span>Au</span><input type="date" name="date_to"></label>
       <label class="field"><span>Statut</span>
-        <select name="status"><option value="">Tous</option><option value="queued">queued</option><option value="sending">sending</option><option value="done">done</option><option value="failed">failed</option></select>
+        <select name="status"><option value="">Tous</option><option value="queued">En attente</option><option value="sending">Envoi en cours</option><option value="done">Terminée</option><option value="failed">Échec</option></select>
       </label>
       <label class="field"><span>Test</span>
         <select name="is_test"><option value="">Tous</option><option value="true">Test</option><option value="false">Réel</option></select>
@@ -91,7 +91,7 @@
       <label class="field"><span>Groupe</span>
         <select name="group_id"><option value="">Tous</option>{% for g in all_groups %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}</select>
       </label>
-      <button class="btn btn-text" type="reset" id="hist-reset"><span class="icon">filter_alt_off</span>Réinitialiser</button>
+      <button class="btn btn-text" type="reset" id="hist-reset"><span class="icon" aria-hidden="true">filter_alt_off</span>Réinitialiser</button>
     </div>
   </form>
   <div id="history" hx-get="/ui/announce/history" hx-include="#hist-filters" hx-trigger="load, refresh, every 10s [document.querySelector('#history [data-page]') === null || document.querySelector('#history [data-page]').dataset.page === '1']"></div>

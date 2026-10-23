@@ -370,7 +370,12 @@ async def test_speaker_ma_player_id(client, redis, make_user, login_as) -> None:
     sid = r.json()["id"]
     r = await client.patch(f"/speakers/{sid}", json={"ma_player_id": "other"})
     assert r.json()["ma_player_id"] == "other"
-    assert (await client.patch(f"/speakers/{sid}", json={"ma_player_id": "a b"})).status_code == 422
+    r = await client.patch(f"/speakers/{sid}", json={"ma_player_id": "Epitech - 001"})
+    assert r.status_code == 200 and r.json()["ma_player_id"] == "Epitech - 001"
+    for bad in (" a", "a ", "  "):
+        assert (
+            await client.patch(f"/speakers/{sid}", json={"ma_player_id": bad})
+        ).status_code == 422
     assert (await client.patch(f"/speakers/{sid}", json={"ma_player_id": None})).json()[
         "ma_player_id"
     ] is None

@@ -11,7 +11,7 @@
         <label class="field"><span>Icône (Material Symbols)</span><input class="mono" type="text" name="icon" value="{{ t.icon or '' }}" maxlength="64" pattern="[a-z0-9_]+"></label>
         <label class="field"><span>Couleur (#rrggbb)</span><input class="mono" type="text" name="color" value="{{ t.color or '' }}" maxlength="7" pattern="#[0-9a-fA-F]{6}"></label>
       </div>
-      <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+      <button class="btn btn-tonal" type="submit"><span class="icon" aria-hidden="true">save</span>Enregistrer</button>
     </form>
   </li>
   {% else %}

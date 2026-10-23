@@ -1,3 +1,4 @@
+{% from "_macros.html" import active_toggle %}
 <form class="stack" data-planning-form hx-post="/schedules" hx-ext="json-typed" data-json data-arrays="days,group_ids,speaker_ids" data-bools="is_test,respect_closures" data-ints="stop_volume" data-toast="Planification créée" data-reset data-refresh="#schedules" hx-swap="none">
   <div class="row">
     <label class="field grow"><span>Nom</span><input type="text" name="name" required maxlength="100"></label>
@@ -55,7 +56,7 @@
     <label class="field"><span>Mode test (préfixe vocal)</span>
       <select name="is_test"><option value="false">Non</option><option value="true">Oui</option></select>
     </label>
-    <button class="btn btn-filled" type="submit"><span class="icon">add</span>Créer</button>
+    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Créer</button>
   </div>
 </form>
 
@@ -78,9 +79,9 @@
       <div class="preview"></div>
     </details>
     <div class="row">
-      <button class="btn {{ 'btn-tonal' if s.is_active else 'btn-text' }}" type="button" hx-patch="/schedules/{{ s.id }}" hx-vals='{"is_active": {{ 'false' if s.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#schedules"><span class="icon">{{ 'toggle_on' if s.is_active else 'toggle_off' }}</span>{{ 'Actif' if s.is_active else 'Inactif' }}</button>
-      <button class="btn btn-tonal" type="button" hx-post="/schedules/{{ s.id }}/run" hx-confirm="Exécuter « {{ s.name }} » maintenant ?" data-toast="Exécuté" hx-swap="none" data-refresh="#schedules"><span class="icon">play_arrow</span>Exécuter maintenant</button>
-      <button class="btn btn-icon btn-danger" type="button" hx-delete="/schedules/{{ s.id }}" hx-confirm="Supprimer la planification {{ s.name }} ?" hx-swap="none" data-refresh="#schedules" title="Supprimer"><span class="icon">delete</span></button>
+      {{ active_toggle("/schedules/" ~ s.id, s.is_active, 'Actif', 'Inactif', '#schedules') }}
+      <button class="btn btn-tonal" type="button" hx-post="/schedules/{{ s.id }}/run" hx-confirm="Exécuter « {{ s.name }} » maintenant ?" data-toast="Exécuté" hx-swap="none" data-refresh="#schedules"><span class="icon" aria-hidden="true">play_arrow</span>Exécuter maintenant</button>
+      <button class="btn btn-icon btn-danger" type="button" hx-delete="/schedules/{{ s.id }}" hx-confirm="Supprimer la planification {{ s.name }} ?" hx-swap="none" data-refresh="#schedules" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>
     </div>
   </li>
   {% else %}

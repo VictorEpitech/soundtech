@@ -37,14 +37,43 @@
     },
   });
 
+  // Toast : les erreurs restent affichées jusqu'à fermeture (ou action) ; opts.action = { label, run }.
   var toastEl, toastTimer;
-  function toast(msg, isError) {
+  function hideToast() {
+    clearTimeout(toastTimer);
+    if (toastEl) toastEl.classList.remove("show");
+  }
+  function toast(msg, isError, opts) {
     toastEl = toastEl || document.getElementById("toast");
-    toastEl.textContent = msg;
+    clearTimeout(toastTimer);
+    toastEl.setAttribute("role", isError ? "alert" : "status");
+    toastEl.setAttribute("aria-live", isError ? "assertive" : "polite");
+    toastEl.textContent = "";
+    var span = document.createElement("span");
+    span.className = "toast-msg";
+    span.textContent = msg;
+    toastEl.appendChild(span);
+    var action = opts && opts.action;
+    if (action) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn";
+      b.textContent = action.label;
+      b.addEventListener("click", function () { hideToast(); action.run(); });
+      toastEl.appendChild(b);
+    }
+    if (isError) {
+      var x = document.createElement("button");
+      x.type = "button";
+      x.className = "btn btn-icon";
+      x.setAttribute("aria-label", "Fermer le message");
+      x.innerHTML = '<span class="icon" aria-hidden="true">close</span>';
+      x.addEventListener("click", hideToast);
+      toastEl.appendChild(x);
+    }
     toastEl.classList.toggle("is-error", !!isError);
     toastEl.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 4000);
+    if (!isError) toastTimer = setTimeout(hideToast, 4000);
   }
 
   function errorText(xhr) {
@@ -144,6 +173,41 @@
     if (el) openStream(el);
   });
 
+
+  // Validation de base : champ requis rempli d'espaces refusé ; message d'erreur lié au champ.
+  function fieldError(input) {
+    var id = (input.id || input.name || "f") + "-error";
+    var err = input.parentNode.querySelector(".field-error");
+    if (!err) {
+      err = document.createElement("span");
+      err.className = "field-error";
+      err.setAttribute("role", "alert");
+      input.insertAdjacentElement("afterend", err);
+    }
+    err.id = id;
+    input.setAttribute("aria-describedby", id);
+    return err;
+  }
+  function clearError(input) {
+    input.removeAttribute("aria-invalid");
+    var err = input.parentNode && input.parentNode.querySelector(".field-error");
+    if (err) err.remove();
+  }
+  document.addEventListener("invalid", function (e) {
+    var t = e.target;
+    if (!t.form || t.type === "checkbox") return;
+    t.setAttribute("aria-invalid", "true");
+    fieldError(t).textContent = t.validationMessage;
+  }, true);
+  document.addEventListener("input", function (e) {
+    var t = e.target;
+    if (!t.matches || !t.matches("input[required], textarea[required]")) return;
+    if (t.type === "text" || t.tagName === "TEXTAREA") {
+      t.setCustomValidity(t.value && !t.value.trim() ? "Ce champ ne peut pas être vide." : "");
+    }
+    if (t.hasAttribute("aria-invalid") && t.checkValidity()) clearError(t);
+  });
+
   document.body.addEventListener("htmx:sendError", function () {
     toast("Serveur injoignable", true);
   });
@@ -220,7 +284,7 @@
   }
 
   window.SoundUI = {
-    toast: toast, groupCall: groupCall, selected: selected, refresh: refresh,
+    toast: toast, hideToast: hideToast, groupCall: groupCall, selected: selected, refresh: refresh,
   };
 
   // Message pré-enregistré : désactive le texte libre.

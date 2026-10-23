@@ -1,3 +1,4 @@
+{% from "_macros.html" import status_badge %}
 {% if not rows %}
 <p class="muted">Aucun évènement.</p>
 {% else %}
@@ -13,10 +14,10 @@
       <td data-label="Type">{{ i.type }}</td>
       <td data-label="Titre"><strong>{{ i.title }}</strong></td>
       <td data-label="Mode"><span class="badge mono {{ 'mode-test' if i.is_test else 'mode-real' }}">{{ 'TEST' if i.is_test else 'RÉEL' }}</span></td>
-      <td data-label="Statut"><span class="badge mono incident-{{ i.status }}">{{ i.status }}</span></td>
+      <td data-label="Statut">{{ status_badge(i.status) }}</td>
       <td class="muted small" data-label="Auteur">{{ i.created_by_email or '' }}</td>
       <td class="mono" data-label="Réponses">{% if i.status in ('sent', 'closed') %}{{ i.responded }}{% if roster_total is not none %} / {{ roster_total }}{% endif %}{% else %}—{% endif %}</td>
-      <td><a class="btn btn-text" href="/alerts/{{ i.id }}"><span class="icon">monitoring</span>Détails</a></td>
+      <td><a class="btn btn-text" href="/alerts/{{ i.id }}"><span class="icon" aria-hidden="true">monitoring</span>Détails</a></td>
     </tr>
   {% endfor %}
   </tbody>

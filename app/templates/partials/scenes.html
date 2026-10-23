@@ -1,3 +1,4 @@
+{% from "_macros.html" import active_toggle %}
 {% macro fields(sc) %}
 <div class="row">
   <label class="field grow"><span>Nom</span><input type="text" name="name" value="{{ sc.name if sc else '' }}" required maxlength="100"></label>
@@ -38,25 +39,25 @@
 </fieldset>
 {% endmacro %}
 <details class="card-sub">
-  <summary class="btn btn-filled"><span class="icon">add</span>Nouvelle scène</summary>
+  <summary class="btn btn-filled"><span class="icon" aria-hidden="true">add</span>Nouvelle scène</summary>
   <form class="stack" hx-post="/scenes" hx-ext="json-typed" data-json data-arrays="speaker_ids" data-ints="volume" data-bools="shuffle" data-toast="Scène créée" data-refresh="#scenes" hx-swap="none">
     {{ fields(none) }}
-    <button class="btn btn-filled" type="submit"><span class="icon">add</span>Créer la scène</button>
+    <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Créer la scène</button>
   </form>
 </details>
 <ul class="list">
   {% for sc in rows %}
   <li>
     <details>
-      <summary><span class="icon">{{ sc.icon or 'queue_music' }}</span> <strong>{{ sc.name }}</strong>{% if not sc.is_active %} <span class="badge">inactive</span>{% endif %}</summary>
+      <summary><span class="icon" aria-hidden="true">{{ sc.icon or 'queue_music' }}</span> <strong>{{ sc.name }}</strong>{% if not sc.is_active %} <span class="badge">inactive</span>{% endif %}</summary>
       <form class="stack" hx-patch="/scenes/{{ sc.id }}" hx-ext="json-typed" data-json data-arrays="speaker_ids" data-ints="volume" data-bools="shuffle" hx-swap="none" data-refresh="#scenes" data-toast="Scène enregistrée">
         {{ fields(sc) }}
-        <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+        <button class="btn btn-tonal" type="submit"><span class="icon" aria-hidden="true">save</span>Enregistrer</button>
       </form>
     </details>
     <div class="row">
-      <button class="btn {{ 'btn-tonal' if sc.is_active else 'btn-text' }}" type="button" hx-patch="/scenes/{{ sc.id }}" hx-vals='{"is_active": {{ 'false' if sc.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#scenes"><span class="icon">{{ 'toggle_on' if sc.is_active else 'toggle_off' }}</span>{{ 'Active' if sc.is_active else 'Inactive' }}</button>
-      <button class="btn btn-icon btn-danger" type="button" hx-delete="/scenes/{{ sc.id }}" hx-confirm="Supprimer la scène {{ sc.name }} ?" hx-swap="none" data-refresh="#scenes" title="Supprimer"><span class="icon">delete</span></button>
+      {{ active_toggle("/scenes/" ~ sc.id, sc.is_active, 'Active', 'Inactive', '#scenes') }}
+      <button class="btn btn-icon btn-danger" type="button" hx-delete="/scenes/{{ sc.id }}" hx-confirm="Supprimer la scène {{ sc.name }} ?" hx-swap="none" data-refresh="#scenes" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>
     </div>
   </li>
   {% else %}

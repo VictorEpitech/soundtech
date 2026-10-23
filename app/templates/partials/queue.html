@@ -6,7 +6,7 @@
 {% set base = '/music/players/' ~ player_id ~ '/queue' %}
 <div class="row between">
   <span class="muted small">{{ queue['items'] | length }} élément(s)</span>
-  <button class="btn btn-text btn-danger" type="button" hx-post="{{ base }}/clear" hx-swap="none" hx-confirm="Vider la file d'attente ?" data-refresh="#queue"><span class="icon">delete_sweep</span>Vider</button>
+  <button class="btn btn-text btn-danger" type="button" hx-post="{{ base }}/clear" hx-swap="none" hx-confirm="Vider la file d'attente ?" data-refresh="#queue"><span class="icon" aria-hidden="true">delete_sweep</span>Vider</button>
 </div>
 <ul class="list media-list">
   {% for i in queue['items'] %}
@@ -14,14 +14,14 @@
     <button class="media" type="button" hx-post="{{ base }}/items/{{ i.id }}/play" hx-swap="none" data-refresh="#queue" title="Lire à partir d'ici">
       <img class="cover" src="{{ i.image or '/static/cover.svg' }}" alt="" loading="lazy" width="48" height="48">
       <span class="media-text">
-        <strong>{% if i.current %}<span class="icon">graphic_eq</span> {% endif %}{{ i.name }}</strong>
+        <strong>{% if i.current %}<span class="icon" aria-hidden="true">graphic_eq</span> {% endif %}{{ i.name }}</strong>
         <span class="muted small">{{ (i.artists or []) | join(', ') }}{% if i.duration %} · {{ '%d:%02d' | format(i.duration // 60, i.duration % 60) }}{% endif %}</span>
       </span>
     </button>
     <div class="queue-actions">
-      <button class="btn btn-icon" type="button" hx-post="{{ base }}/items/{{ i.id }}/move" hx-vals='{"shift": -1}' data-json data-ints="shift" hx-swap="none" data-refresh="#queue" title="Monter" {% if loop.first %}disabled{% endif %}><span class="icon">arrow_upward</span></button>
-      <button class="btn btn-icon" type="button" hx-post="{{ base }}/items/{{ i.id }}/move" hx-vals='{"shift": 1}' data-json data-ints="shift" hx-swap="none" data-refresh="#queue" title="Descendre" {% if loop.last %}disabled{% endif %}><span class="icon">arrow_downward</span></button>
-      <button class="btn btn-icon btn-danger" type="button" hx-delete="{{ base }}/items/{{ i.id }}" hx-swap="none" data-refresh="#queue" title="Supprimer"><span class="icon">close</span></button>
+      <button class="btn btn-icon" type="button" hx-post="{{ base }}/items/{{ i.id }}/move" hx-vals='{"shift": -1}' data-json data-ints="shift" hx-swap="none" data-refresh="#queue" title="Monter" aria-label="Monter" {% if loop.first %}disabled{% endif %}><span class="icon" aria-hidden="true">arrow_upward</span></button>
+      <button class="btn btn-icon" type="button" hx-post="{{ base }}/items/{{ i.id }}/move" hx-vals='{"shift": 1}' data-json data-ints="shift" hx-swap="none" data-refresh="#queue" title="Descendre" aria-label="Descendre" {% if loop.last %}disabled{% endif %}><span class="icon" aria-hidden="true">arrow_downward</span></button>
+      <button class="btn btn-icon btn-danger" type="button" hx-delete="{{ base }}/items/{{ i.id }}" hx-swap="none" data-refresh="#queue" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">close</span></button>
     </div>
   </li>
   {% endfor %}

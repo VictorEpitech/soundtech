@@ -8,7 +8,7 @@
   <div class="scene-grid" id="scenes">
     {% for sc in scenes %}
     <button class="scene-btn" type="button" data-scene="{{ sc.id }}"{% if sc.color %} style="--tone: {{ sc.color }}"{% endif %}>
-      <span class="icon">{{ sc.icon or 'queue_music' }}</span>{{ sc.name }}
+      <span class="icon" aria-hidden="true">{{ sc.icon or 'queue_music' }}</span>{{ sc.name }}
     </button>
     {% endfor %}
   </div>
@@ -22,17 +22,17 @@
   {% if groups %}
   <div class="chips" id="group-picks">
     {% for g in groups %}
-    <button class="btn btn-tonal" type="button" data-pick-group="{{ g.id }}" title="Sélectionner le groupe {{ g.name }}"><span class="icon">speaker_group</span>{{ g.name }}</button>
+    <button class="btn btn-tonal" type="button" data-pick-group="{{ g.id }}" title="Sélectionner le groupe {{ g.name }}"><span class="icon" aria-hidden="true">speaker_group</span>{{ g.name }}</button>
     {% endfor %}
   </div>
   {% endif %}
   <div id="group-bar" class="player-ctl group-bar" hidden>
     <span class="badge mono" id="sel-count">0</span>
-    <button class="btn btn-icon" type="button" data-group="previous" title="Précédent (sélection)"><span class="icon">skip_previous</span></button>
-    <button class="btn btn-icon btn-filled" type="button" data-group="resume" title="Lecture (sélection)"><span class="icon">play_arrow</span></button>
-    <button class="btn btn-icon btn-filled" type="button" data-group="pause" title="Pause (sélection)"><span class="icon">pause</span></button>
-    <button class="btn btn-icon" type="button" data-group="next" title="Suivant (sélection)"><span class="icon">skip_next</span></button>
-    <span class="icon vol">volume_up</span>
+    <button class="btn btn-icon" type="button" data-group="previous" title="Précédent (sélection)" aria-label="Précédent (sélection)"><span class="icon" aria-hidden="true">skip_previous</span></button>
+    <button class="btn btn-icon btn-filled" type="button" data-group="resume" title="Lecture (sélection)" aria-label="Lecture (sélection)"><span class="icon" aria-hidden="true">play_arrow</span></button>
+    <button class="btn btn-icon btn-filled" type="button" data-group="pause" title="Pause (sélection)" aria-label="Pause (sélection)"><span class="icon" aria-hidden="true">pause</span></button>
+    <button class="btn btn-icon" type="button" data-group="next" title="Suivant (sélection)" aria-label="Suivant (sélection)"><span class="icon" aria-hidden="true">skip_next</span></button>
+    <span class="icon vol" aria-hidden="true">volume_up</span>
     <input class="slider" type="range" id="group-volume" min="0" max="100" value="30" aria-label="Volume de la sélection">
   </div>
   <div id="players" hx-get="/ui/music/players" hx-trigger="refresh, every 8s [!document.activeElement || document.activeElement.type !== 'range']" hx-swap="innerHTML">
@@ -52,11 +52,11 @@
   <p class="muted small">La lecture est lancée sur les lecteurs cochés ci-dessus.</p>
   <div id="results" class="results" aria-live="polite"></div>
 </section>
-<dialog id="play-menu" class="menu">
+<dialog id="play-menu" class="menu" aria-labelledby="play-menu-title">
   <p class="mono" id="play-menu-title"></p>
-  <button class="btn btn-filled" type="button" data-opt="play"><span class="icon">play_arrow</span>Lire maintenant</button>
-  <button class="btn btn-tonal" type="button" data-opt="next"><span class="icon">playlist_play</span>Lire ensuite</button>
-  <button class="btn btn-tonal" type="button" data-opt="add"><span class="icon">playlist_add</span>Ajouter à la file</button>
+  <button class="btn btn-filled" type="button" data-opt="play"><span class="icon" aria-hidden="true">play_arrow</span>Lire maintenant</button>
+  <button class="btn btn-tonal" type="button" data-opt="next"><span class="icon" aria-hidden="true">playlist_play</span>Lire ensuite</button>
+  <button class="btn btn-tonal" type="button" data-opt="add"><span class="icon" aria-hidden="true">playlist_add</span>Ajouter à la file</button>
   <button class="btn btn-text" type="button" data-opt="">Annuler</button>
 </dialog>
 {% endblock %}

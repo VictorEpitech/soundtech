@@ -1,8 +1,9 @@
+{% from "_macros.html" import status_badge %}
 <div class="stack">
   <h2 id="dt-title">Annonce</h2>
   <p class="preview-text">{{ a.text }}</p>
   <p class="muted small">
-    <span class="badge mono status-{{ a.status }}">{{ a.status }}</span>
+    {{ status_badge(a.status) }}
     {% if a.is_test %}<span class="badge mono">TEST</span>{% endif %}
     {{ a.author_email or '' }}
     {% if a.voice or a.lang %} · {{ a.voice or 'voix par défaut' }} / {{ a.lang or 'langue par défaut' }}{% endif %}
@@ -17,9 +18,9 @@
     {% for t in per_speaker %}
     <li class="row between">
       <span>{{ t.name }}</span>
-      {% if t.result is none %}<span class="badge mono">en attente</span>
-      {% elif t.result.ok %}<span class="badge mono status-done">ok</span>
-      {% else %}<span class="badge mono status-failed">{{ t.result.error or 'échec' }}</span>{% endif %}
+      {% if t.result is none %}{{ status_badge('queued') }}
+      {% elif t.result.ok %}{{ status_badge('ok', 'Envoyée') }}
+      {% else %}{{ status_badge('failed', 'Échec : ' ~ t.result.error if t.result.error else 'Échec') }}{% endif %}
     </li>
     {% endfor %}
   </ul>

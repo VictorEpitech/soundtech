@@ -1,27 +1,28 @@
 {% extends "base.html" %}
+{% from "_macros.html" import status_badge %}
 {% block title %}Alerte · {{ incident.title }}{% endblock %}
 {% block content %}
-<p><a class="btn btn-text" href="/alerts"><span class="icon">arrow_back</span>Alertes</a></p>
+<p><a class="btn btn-text" href="/alerts"><span class="icon" aria-hidden="true">arrow_back</span>Alertes</a></p>
 <h1>{{ incident.title }}</h1>
-{% if incident.is_test %}<p class="banner-test"><span class="icon">science</span>TEST (exercice)</p>{% endif %}
+{% if incident.is_test %}<p class="banner-test"><span class="icon" aria-hidden="true">science</span>TEST (exercice)</p>{% endif %}
 <section class="card">
   <div class="row between">
     <div class="row">
       <span class="badge mono {{ 'mode-test' if incident.is_test else 'mode-real' }}">{{ 'TEST' if incident.is_test else 'RÉEL' }}</span>
-      <span class="badge mono incident-{{ incident.status }}">{{ incident.status }}</span>
+      {{ status_badge(incident.status) }}
       <span class="muted small mono">{{ incident.type }}</span>
     </div>
     {% if incident.status in ('sent', 'failed') %}
-    <button class="btn btn-tonal" type="button" hx-post="/incidents/{{ incident.id }}/close" hx-confirm="Clore cet incident ?" hx-swap="none" data-toast="Incident clos" data-reload><span class="icon">check_circle</span>Clore l'incident</button>
+    <button class="btn btn-tonal" type="button" hx-post="/incidents/{{ incident.id }}/close" hx-confirm="Clore cet incident ?" hx-swap="none" data-toast="Incident clos" data-reload><span class="icon" aria-hidden="true">check_circle</span>Clore l'incident</button>
     {% endif %}
   </div>
   <h2>Message diffusé</h2>
   <p class="ad-message">{{ incident.message }}</p>
   <h2>Chronologie</h2>
   <ul class="list timeline">
-    <li><span class="icon">edit_note</span> Créé le <span class="mono">{{ incident.created_at[:19] | replace('T', ' ') if incident.created_at else '—' }}</span>{% if incident.created_by_email %} par {{ incident.created_by_email }}{% endif %}</li>
-    <li><span class="icon">notifications_active</span> {% if incident.sent_at %}Envoyé le <span class="mono">{{ incident.sent_at[:19] | replace('T', ' ') }}</span>{% else %}Pas encore envoyé{% endif %}</li>
-    <li><span class="icon">check_circle</span> {% if incident.closed_at %}Clos le <span class="mono">{{ incident.closed_at[:19] | replace('T', ' ') }}</span>{% if incident.closed_by_email %} par {{ incident.closed_by_email }}{% endif %}{% else %}Non clos{% endif %}</li>
+    <li><span class="icon" aria-hidden="true">edit_note</span> Créé le <span class="mono">{{ incident.created_at[:19] | replace('T', ' ') if incident.created_at else '—' }}</span>{% if incident.created_by_email %} par {{ incident.created_by_email }}{% endif %}</li>
+    <li><span class="icon" aria-hidden="true">notifications_active</span> {% if incident.sent_at %}Envoyé le <span class="mono">{{ incident.sent_at[:19] | replace('T', ' ') }}</span>{% else %}Pas encore envoyé{% endif %}</li>
+    <li><span class="icon" aria-hidden="true">check_circle</span> {% if incident.closed_at %}Clos le <span class="mono">{{ incident.closed_at[:19] | replace('T', ' ') }}</span>{% if incident.closed_by_email %} par {{ incident.closed_by_email }}{% endif %}{% else %}Non clos{% endif %}</li>
   </ul>
   <h2>Diffusion</h2>
   {% set d = incident.delivery %}
@@ -39,10 +40,10 @@
   <div class="row between">
     <h2>Réponses</h2>
     <div class="row">
-      <a class="btn btn-tonal" href="/incidents/{{ incident.id }}/export.csv"><span class="icon">download</span>Export CSV</a>
-      <a class="btn btn-tonal" href="/incidents/{{ incident.id }}/report.pdf"><span class="icon">picture_as_pdf</span>Rapport PDF</a>
+      <a class="btn btn-tonal" href="/incidents/{{ incident.id }}/export.csv"><span class="icon" aria-hidden="true">download</span>Export CSV</a>
+      <a class="btn btn-tonal" href="/incidents/{{ incident.id }}/report.pdf"><span class="icon" aria-hidden="true">picture_as_pdf</span>Rapport PDF</a>
       {% if incident.status == 'sent' %}
-      <button class="btn btn-filled" type="button" hx-post="/incidents/{{ incident.id }}/remind" hx-confirm="Relancer les non-répondants sur Teams ?" hx-swap="none" data-toast="Relance envoyée" data-refresh="#responses"><span class="icon">notifications_active</span>Relancer les non-répondants</button>
+      <button class="btn btn-filled" type="button" hx-post="/incidents/{{ incident.id }}/remind" hx-confirm="Relancer les non-répondants sur Teams ?" hx-swap="none" data-toast="Relance envoyée" data-refresh="#responses"><span class="icon" aria-hidden="true">notifications_active</span>Relancer les non-répondants</button>
       {% endif %}
     </div>
   </div>
@@ -52,7 +53,7 @@
   <form class="row" hx-patch="/incidents/{{ incident.id }}/auto-remind" hx-ext="json-typed" data-json data-ints="interval,max" hx-swap="none" data-toast="Relances automatiques enregistrées" data-reload>
     <label class="field"><span>Intervalle (s, vide = défaut, 0 = off)</span><input type="number" name="interval" min="0" max="86400" value="{{ ar.interval if ar.overridden else '' }}"></label>
     <label class="field"><span>Plafond (vide = défaut)</span><input type="number" name="max" min="0" max="50" value="{{ ar.max if ar.overridden else '' }}"></label>
-    <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+    <button class="btn btn-tonal" type="submit"><span class="icon" aria-hidden="true">save</span>Enregistrer</button>
   </form>
   {% endif %}
   <div id="responses" hx-get="/ui/alerts/{{ incident.id }}/responses" hx-trigger="load, refresh" data-sse="/incidents/{{ incident.id }}/stream"></div>

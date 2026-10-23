@@ -1,16 +1,12 @@
 {% extends "base.html" %}
+{% from "_macros.html" import switch %}
 {% block title %}Alertes{% endblock %}
 {% block content %}
 <h1>Alertes de sécurité</h1>
-<p class="banner-test" id="test-banner" hidden><span class="icon">science</span>MODE EXERCICE : le message vocal sera préfixé et la carte Teams marquée TEST.</p>
+<p class="banner-test" id="test-banner" hidden><span class="icon" aria-hidden="true">science</span>MODE EXERCICE : le message vocal sera préfixé et la carte Teams marquée TEST.</p>
 <section class="card">
   <div class="mode-switch">
-    <label class="switch" for="is-test">
-      <input type="checkbox" role="switch" id="is-test">
-      <span class="track" aria-hidden="true"><span class="thumb"></span></span>
-      <span class="switch-text"><strong>Mode exercice / test</strong>
-        <span id="mode-state" class="muted">Désactivé : les alertes sont RÉELLES</span></span>
-    </label>
+    {{ switch('is-test', 'Mode exercice / test', 'mode-state', 'Désactivé : les alertes sont RÉELLES') }}
   </div>
   {% if not templates %}
   <p class="muted">Aucun modèle d'alerte actif. Un administrateur peut en configurer dans Admin.</p>
@@ -18,7 +14,7 @@
   <div class="alert-grid" id="alert-grid" tabindex="-1" aria-label="Types d'alerte" data-alert-word="{{ alert_word }}" data-test-word="{{ test_word }}">
     {% for t in templates %}
     <button type="button" class="alert-btn" data-type="{{ t.type }}" data-label="{{ t.label }}" data-title="{{ t.title }}" data-message="{{ t.message }}"{% if t.color %} style="--tone: {{ t.color }}; --on-tone: #fff"{% endif %}>
-      <span class="icon">{{ t.icon or 'warning' }}</span>
+      <span class="icon" aria-hidden="true">{{ t.icon or 'warning' }}</span>
       <span class="alert-label">{{ t.label }}</span>
     </button>
     {% endfor %}
@@ -37,7 +33,7 @@
     </label>
     <div class="row">
       <button class="btn btn-text" type="button" id="ad-cancel">Annuler</button>
-      <button class="btn btn-filled btn-danger" type="submit" id="ad-send" disabled><span class="icon">notifications_active</span><span id="ad-send-label"></span></button>
+      <button class="btn btn-filled btn-danger" type="submit" id="ad-send" disabled><span class="icon" aria-hidden="true">notifications_active</span><span id="ad-send-label"></span></button>
     </div>
   </form>
 </dialog>

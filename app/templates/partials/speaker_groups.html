@@ -1,3 +1,4 @@
+{% from "_macros.html" import active_toggle %}
 <form class="stack" hx-post="/speaker-groups" hx-ext="json-typed" data-json data-arrays="member_ids" data-toast="Groupe créé" data-reset data-refresh="#speaker-groups" hx-swap="none">
   <div class="row">
     <label class="field grow"><span>Nom</span><input type="text" name="name" required maxlength="100"></label>
@@ -11,7 +12,7 @@
     <p class="muted">Aucune enceinte déclarée.</p>
     {% endfor %}
   </fieldset>
-  <button class="btn btn-filled" type="submit"><span class="icon">add</span>Créer le groupe</button>
+  <button class="btn btn-filled" type="submit"><span class="icon" aria-hidden="true">add</span>Créer le groupe</button>
 </form>
 <ul class="list">
   {% for g in rows %}
@@ -31,11 +32,11 @@
         <label class="chip"><input type="checkbox" name="member_ids" value="{{ s.id }}" {% if s.id in g.member_ids %}checked{% endif %}><span>{{ s.name }}{% if not s.is_active %} (inactive){% endif %}</span></label>
         {% endfor %}
       </fieldset>
-      <button class="btn btn-tonal" type="submit"><span class="icon">save</span>Enregistrer</button>
+      <button class="btn btn-tonal" type="submit"><span class="icon" aria-hidden="true">save</span>Enregistrer</button>
     </form>
     <div class="row">
-      <button class="btn {{ 'btn-tonal' if g.is_active else 'btn-text' }}" type="button" hx-patch="/speaker-groups/{{ g.id }}" hx-vals='{"is_active": {{ 'false' if g.is_active else 'true' }}}' data-json hx-swap="none" data-refresh="#speaker-groups"><span class="icon">{{ 'toggle_on' if g.is_active else 'toggle_off' }}</span>{{ 'Actif' if g.is_active else 'Inactif' }}</button>
-      <button class="btn btn-icon btn-danger" type="button" hx-delete="/speaker-groups/{{ g.id }}" hx-confirm="Supprimer le groupe {{ g.name }} ?" hx-swap="none" data-refresh="#speaker-groups" title="Supprimer"><span class="icon">delete</span></button>
+      {{ active_toggle("/speaker-groups/" ~ g.id, g.is_active, 'Actif', 'Inactif', '#speaker-groups') }}
+      <button class="btn btn-icon btn-danger" type="button" hx-delete="/speaker-groups/{{ g.id }}" hx-confirm="Supprimer le groupe {{ g.name }} ?" hx-swap="none" data-refresh="#speaker-groups" title="Supprimer" aria-label="Supprimer"><span class="icon" aria-hidden="true">delete</span></button>
     </div>
   </li>
   {% else %}

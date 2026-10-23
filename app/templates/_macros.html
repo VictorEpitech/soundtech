@@ -1,0 +1,41 @@
+{# Macros partagées : icône décorative, interrupteur actif/inactif, statut lisible (libellé + icône). #}
+{% macro icon(name, cls='') -%}
+<span class="icon{% if cls %} {{ cls }}{% endif %}" aria-hidden="true">{{ name }}</span>
+{%- endmacro %}
+
+{% macro active_toggle(url, active, on_label, off_label, refresh, key='is_active', method='patch') -%}
+<button class="btn {{ 'btn-tonal' if active else 'btn-text' }}" type="button" aria-pressed="{{ 'true' if active else 'false' }}" hx-{{ method }}="{{ url }}" hx-vals='{"{{ key }}": {{ 'false' if active else 'true' }}}' data-json data-ints="shift" hx-swap="none" data-refresh="{{ refresh }}"><span class="icon" aria-hidden="true">{{ 'toggle_on' if active else 'toggle_off' }}</span>{{ on_label if active else off_label }}</button>
+{%- endmacro %}
+
+{% set _STATUS = {
+  'queued': ('En attente', 'schedule', ''),
+  'sending': ('Envoi en cours', 'sync', ''),
+  'running': ('En cours', 'sync', ''),
+  'done': ('Terminée', 'check_circle', 'status-done'),
+  'ok': ('Réussie', 'check_circle', 'status-ok'),
+  'failed': ('Échec', 'error', 'status-failed'),
+  'missed': ('Manquée', 'event_busy', 'status-missed'),
+  'skipped_closure': ('Ignorée (fermeture)', 'block', 'status-skipped_closure'),
+  'skipped_alert': ('Ignorée (alerte en cours)', 'block', 'status-skipped_alert'),
+  'safe_campus': ('En sécurité (campus)', 'check_circle', 'status-done'),
+  'safe_offsite': ('En sécurité (hors campus)', 'check_circle', 'status-done'),
+  'draft': ('Brouillon', 'edit_note', 'incident-draft'),
+  'sent': ('Diffusée', 'campaign', 'incident-sent'),
+  'closed': ('Clos', 'check_circle', 'incident-closed'),
+  'danger': ('En danger', 'warning', 'status-failed'),
+} %}
+{% macro status_badge(status, label=none) -%}
+{%- set s = _STATUS.get(status, (status, 'info', '')) -%}
+<span class="badge mono {{ s[2] }}"><span class="icon icon-sm" aria-hidden="true">{{ s[1] }}</span> {{ label or s[0] }}</span>
+{%- endmacro %}
+
+{% macro switch(id, title, state_id, state_text) -%}
+<label class="switch" for="{{ id }}">
+  <input type="checkbox" role="switch" id="{{ id }}" aria-describedby="{{ state_id }}">
+  <span class="track" aria-hidden="true"><span class="thumb"></span></span>
+  <span class="switch-text"><strong>{{ title }}</strong>
+    <span id="{{ state_id }}" class="muted" aria-live="polite">{{ state_text }}</span></span>
+</label>
+{%- endmacro %}
+
+{% macro status_label(status) -%}{{ _STATUS.get(status, (status,))[0] }}{%- endmacro %}

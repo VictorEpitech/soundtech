@@ -13,10 +13,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Sound">
   <title>{% block title %}Sound{% endblock %} · Sound</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600&family=JetBrains+Mono:wght@400;500&family=Roboto:wght@400;500&display=swap">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0&display=swap">
+  <link rel="preload" href="/static/fonts/MaterialSymbolsOutlined-300.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/fonts.css">
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/app.js" defer></script>
@@ -29,14 +27,14 @@
 </div>
 {% if user %}
   <header class="appbar">
-    <a class="brand" href="/"><span class="icon">graphic_eq</span>Sound</a>
+    <a class="brand" href="/"><span class="icon" aria-hidden="true">graphic_eq</span>Sound</a>
     <nav class="nav" aria-label="Navigation principale">
-      <a href="/" {% if active == 'home' %}aria-current="page"{% endif %}><span class="icon">home</span><span>Accueil</span></a>
-      <a href="/music" {% if active == 'music' %}aria-current="page"{% endif %}><span class="icon">music_note</span><span>Musique</span></a>
-      <a href="/announce" {% if active == 'announce' %}aria-current="page"{% endif %}><span class="icon">campaign</span><span>Annonces</span></a>
-      <a href="/alerts" {% if active == 'alerts' %}aria-current="page"{% endif %}><span class="icon">emergency_home</span><span>Alertes</span></a>
+      <a href="/" {% if active == 'home' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">home</span><span>Accueil</span></a>
+      <a href="/music" {% if active == 'music' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">music_note</span><span>Musique</span></a>
+      <a href="/announce" {% if active == 'announce' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">campaign</span><span>Annonces</span></a>
+      <a href="/alerts" {% if active == 'alerts' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">emergency_home</span><span>Alertes</span></a>
       {% if user.role == 'admin' %}
-      <a href="/admin" {% if active == 'admin' %}aria-current="page"{% endif %}><span class="icon">admin_panel_settings</span><span>Admin</span></a>
+      <a href="/admin" {% if active == 'admin' %}aria-current="page"{% endif %}><span class="icon" aria-hidden="true">admin_panel_settings</span><span>Admin</span></a>
       {% endif %}
     </nav>
     <div class="who">
@@ -44,7 +42,7 @@
       {% if user.role in ('admin', 'staff') %}
       <button class="btn btn-text" type="button" data-push-toggle hidden aria-pressed="false" title="Activer les notifications"><span class="icon" aria-hidden="true">notifications</span><span class="push-label">Activer les notifications</span></button>
       {% endif %}
-      <button class="btn btn-text" type="button" data-logout title="Se déconnecter"><span class="icon">logout</span></button>
+      <button class="btn btn-text" type="button" data-logout title="Se déconnecter" aria-label="Se déconnecter"><span class="icon" aria-hidden="true">logout</span></button>
     </div>
   </header>
 {% if user.role in ('admin', 'staff') and active != 'alerts' %}

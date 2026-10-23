@@ -10,6 +10,7 @@
   --on-surface: #1a2328;
   --on-surface-variant: #4a5a63;
   --outline: #c3ccd1;
+  --outline-strong: #6b7b84;
   --error: #b3261e;
   --on-error: #ffffff;
   --ok: #2e6b4a;
@@ -42,6 +43,7 @@
     --on-surface: #e2e8f0;
     --on-surface-variant: #a9b8c3;
     --outline: #3b4a5c;
+    --outline-strong: #8497ab;
     --error: #f2b8b5;
     --on-error: #601410;
     --ok: #8fd5ac;
@@ -94,6 +96,7 @@ a { color: var(--primary); }
   font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
   user-select: none;
 }
+.icon-sm { font-size: 18px; }
 .icon-lg { font-size: 40px; color: var(--primary); }
 .icon-xl { font-size: 64px; color: var(--primary); }
 
@@ -172,6 +175,7 @@ a { color: var(--primary); }
 .btn-text { padding: 0 16px; }
 .btn-icon { padding: 0; width: 44px; flex: none; }
 .btn-danger { color: var(--error); }
+.btn-filled.btn-danger { background: var(--error); color: var(--on-error); }
 .btn.htmx-request { opacity: 0.6; }
 
 /* Formulaires */
@@ -204,7 +208,7 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 .chip input, .check input { position: absolute; opacity: 0; pointer-events: none; }
 .chip span {
   display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
-  border: 1px solid var(--outline); border-radius: var(--r-md); cursor: pointer;
+  border: 1px solid var(--outline-strong); border-radius: var(--r-md); cursor: pointer;
   transition: background-color var(--dur) var(--ease-in), color var(--dur) var(--ease-in),
     border-color var(--dur) var(--ease-in);
 }
@@ -248,13 +252,17 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 
 /* Toast */
 .toast {
-  position: fixed; left: 16px; right: 16px; bottom: calc(var(--nav-h) + var(--safe-b) + 16px); z-index: 20;
+  position: fixed; left: 16px; right: 16px; bottom: calc(var(--nav-h) + var(--safe-b) + 88px); z-index: 20;
   max-width: 480px; margin: 0 auto; padding: 14px 20px;
+  display: flex; align-items: center; gap: 12px;
   border-radius: var(--r-md); background: var(--on-surface); color: var(--bg);
   opacity: 0; transform: translateY(16px); pointer-events: none;
   transition: opacity var(--dur) var(--ease-in), transform var(--dur) var(--ease-in);
 }
-.toast.show { opacity: 1; transform: none; }
+.toast.show { opacity: 1; transform: none; pointer-events: auto; }
+.toast-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast .btn { min-height: 36px; padding: 0 12px; color: inherit; border: 1px solid currentColor; flex: none; }
+.toast .btn-icon { width: 36px; padding: 0; }
 .toast.is-error { background: var(--error); color: var(--on-error); }
 
 @media (min-width: 600px) {
@@ -277,7 +285,7 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
   .page { padding: 32px; }
   .card { padding: 32px; }
   .grid { grid-template-columns: repeat(3, 1fr); }
-  .toast { bottom: 24px; }
+  .toast { bottom: 24px; right: 160px; }
   .grid-form { grid-template-columns: repeat(4, 1fr); }
 }
 
@@ -296,7 +304,6 @@ legend { font-size: 0.8125rem; color: var(--on-surface-variant); margin-bottom: 
 .incident-draft { color: var(--on-surface); }
 .incident-sent { color: var(--error); }
 .incident-closed { color: var(--ok); }
-.btn-danger { background: var(--error); color: var(--bg); }
 .incident-failed { color: var(--error); }
 
 /* Dashboard des réponses */
@@ -437,3 +444,7 @@ details[open] > summary { margin-bottom: 12px; }
   input, select, textarea, input.mono { font-size: max(16px, 1rem); }
   .btn { min-height: 44px; }
 }
+
+/* Validation de formulaire */
+.field-error { color: var(--error); font-size: 0.8125rem; }
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--error); outline: 1px solid var(--error); }

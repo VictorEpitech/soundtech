@@ -1,8 +1,8 @@
 {% if error %}
-<p class="status-failed"><span class="icon">error</span> {{ error }}</p>
+<p class="status-failed"><span class="icon" aria-hidden="true">error</span> {{ error }}</p>
 {% else %}
 {% for s in orphans %}
-<p class="alert status-failed"><span class="icon">warning</span> {{ s.name }} : l'ID <span class="mono">{{ s.ma_player_id }}</span> ne correspond à aucun lecteur Music Assistant.</p>
+<p class="alert status-failed"><span class="icon" aria-hidden="true">warning</span> {{ s.name }} : l'ID <span class="mono">{{ s.ma_player_id }}</span> ne correspond à aucun lecteur Music Assistant.</p>
 {% endfor %}
 <ul class="list">
   {% for p in players %}
@@ -14,12 +14,12 @@
         {% if p.declared_as %}<p class="muted small">Utilisé par {{ p.declared_as }}</p>{% endif %}
       </div>
       <div class="row" data-ma-use data-player-id="{{ p.player_id }}">
-        <button class="btn btn-text" type="button" data-copy="{{ p.player_id }}" title="Copier l'ID"><span class="icon">content_copy</span>Copier</button>
+        <button class="btn btn-text" type="button" data-copy="{{ p.player_id }}" title="Copier l'ID"><span class="icon" aria-hidden="true">content_copy</span>Copier</button>
         {% if speakers %}
         <label class="field"><span>Enceinte</span>
           <select>{% for s in speakers %}<option value="{{ s.id }}" {% if s.ma_player_id == p.player_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select>
         </label>
-        <button class="btn btn-tonal" type="button" data-use-player><span class="icon">link</span>Utiliser</button>
+        <button class="btn btn-tonal" type="button" data-use-player><span class="icon" aria-hidden="true">link</span>Utiliser</button>
         {% endif %}
       </div>
     </div>

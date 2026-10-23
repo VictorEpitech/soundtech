@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% from "_macros.html" import status_label %}
 {% block title %}Planification{% endblock %}
 {% block content %}
 <div class="row between">
   <h1>Planification</h1>
-  <a class="btn btn-text" href="/admin"><span class="icon">arrow_back</span>Administration</a>
+  <a class="btn btn-text" href="/admin"><span class="icon" aria-hidden="true">arrow_back</span>Administration</a>
 </div>
 <p class="muted small">Le worker vérifie les échéances chaque minute. Une échéance manquée de plus de 5 minutes n'est pas rattrapée (journal : « missed »). Jamais pendant une alerte en cours.</p>
 
@@ -24,7 +25,7 @@
       <select name="schedule_id"><option value="">Toutes</option>{% for s in schedules %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select>
     </label>
     <label class="field"><span>Statut</span>
-      <select name="status"><option value="">Tous</option>{% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+      <select name="status"><option value="">Tous</option>{% for s in statuses %}<option value="{{ s }}">{{ status_label(s) }}</option>{% endfor %}</select>
     </label>
   </form>
   <div id="runs" hx-get="/ui/planning/runs" hx-trigger="load, refresh, htmx:afterSwap from:#schedules" hx-include="#run-filters"></div>
