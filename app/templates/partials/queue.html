@@ -8,7 +8,7 @@
 {% set dur = queue.duration or 0 %}
 {% set el = queue.elapsed or 0 %}
 {% set el = [el, dur] | min if dur else el %}
-<div class="now-playing" id="now-playing" data-state="{{ queue.state or '' }}" data-elapsed="{{ el }}" data-duration="{{ dur }}">
+<div class="now-playing" id="now-playing" data-item="{{ np.id }}" data-state="{{ queue.state or '' }}" data-elapsed="{{ el }}" data-duration="{{ dur }}">
   <img class="cover" src="{{ np.image or '/static/cover.svg' }}" alt="" width="64" height="64">
   <div class="np-body">
     <strong>{{ np.name }}</strong>

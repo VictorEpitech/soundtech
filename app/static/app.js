@@ -373,13 +373,26 @@
     s = Math.max(0, Math.floor(s));
     return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2);
   }
-  var npBase = null;
+  // Horloge locale par titre : le poll remplace le fragment, l'état vit ici (clé = item_id).
+  var npClock = { key: null, state: null, base: 0, t0: 0 };
+  function npLocal() {
+    if (npClock.state !== "playing") return npClock.base;
+    return npClock.base + Math.floor((Date.now() - npClock.t0) / 1000);
+  }
+  function npSync() {
+    var np = document.getElementById("now-playing");
+    if (!np) { npClock.key = null; return; }
+    var key = np.dataset.item || "", state = np.dataset.state || "";
+    var srv = parseInt(np.dataset.elapsed, 10) || 0;
+    var same = npClock.key === key && npClock.state === state;
+    if (same && Math.abs(srv - npLocal()) <= 3) return;
+    npClock = { key: key, state: state, base: srv, t0: Date.now() };
+  }
   function npRender() {
     var np = document.getElementById("now-playing");
     if (!np) return;
-    var el = parseInt(np.dataset.elapsed, 10) || 0;
+    var el = npLocal();
     var dur = parseInt(np.dataset.duration, 10) || 0;
-    if (np.dataset.state === "playing" && npBase) el += Math.floor((Date.now() - npBase) / 1000);
     if (dur) el = Math.min(el, dur);
     var e = np.querySelector(".np-elapsed");
     if (e) e.textContent = fmtTime(el);
@@ -392,7 +405,7 @@
     if (left) left.textContent = "-" + fmtTime(dur - el);
   }
   document.body.addEventListener("htmx:afterSettle", function (e) {
-    if (e.target && e.target.id === "queue") { npBase = Date.now(); npRender(); }
+    if (e.target && e.target.id === "queue") { npSync(); npRender(); }
   });
   setInterval(function () { if (!document.hidden) npRender(); }, 1000);
 

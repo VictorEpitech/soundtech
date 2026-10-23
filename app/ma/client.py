@@ -159,6 +159,7 @@ class MAClient:
             "current_index": q.get("current_index"),
             "state": q.get("state"),
             "elapsed_time": q.get("elapsed_time"),
+            "elapsed_time_last_updated": q.get("elapsed_time_last_updated"),
             "items": items or [],
         }
 

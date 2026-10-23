@@ -229,3 +229,14 @@ async def test_search_fragment_grouped(staff) -> None:
     r = await staff.get("/ui/music/search", params={"q": "so"})
     assert "Titres" in r.text and "Song" in r.text and 'data-uri="lib://t/1"' in r.text
     assert (await staff.get("/ui/music/search", params={"q": "s"})).text.strip() == ""
+
+
+def test_live_elapsed_uses_last_updated() -> None:
+    from app.ma.router import _live_elapsed
+
+    assert _live_elapsed(10.0, 1000.0, "playing", now=1007.5) == 17
+    assert _live_elapsed(10.0, 1000.0, "paused", now=1007.5) == 10
+    assert _live_elapsed(10.0, None, "playing", now=1007.5) == 10
+    assert _live_elapsed(10.0, 2000.0, "playing", now=1007.5) == 10  # futur : ignoré
+    assert _live_elapsed(None, 1000.0, "playing", now=1007.5) is None
+    assert _live_elapsed(0, 1000.0, "playing", now=1003.0) == 3

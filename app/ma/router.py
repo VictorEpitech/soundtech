@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Any, Literal
 
 import httpx
@@ -157,6 +158,23 @@ def _secs(v: Any) -> int | None:
     return int(v)
 
 
+def _live_elapsed(
+    elapsed: Any, last_updated: Any, state: Any, now: float | None = None
+) -> int | None:
+    """Temps écoulé réel : MA fournit un instantané daté (`elapsed_time_last_updated`)."""
+    base = _secs(elapsed)
+    if base is None:
+        return None
+    if state != "playing" or isinstance(last_updated, bool):
+        return base
+    if not isinstance(last_updated, int | float) or last_updated <= 0:
+        return base
+    delta = (time.time() if now is None else now) - last_updated
+    if delta <= 0 or delta > 6 * 3600:
+        return base
+    return int(float(elapsed) + delta)
+
+
 def _finished(i: dict[str, Any], elapsed: int | None) -> bool:
     media = i.get("media_item")
     dur = _secs(i.get("duration") or (media.get("duration") if isinstance(media, dict) else None))
@@ -304,7 +322,9 @@ async def get_queue(
     owners = {} if _is_admin(user) else await _owners(request, player_id)
     upcoming: list[dict[str, Any]] = []
     now: dict[str, Any] | None = None
-    elapsed = _secs(q.get("elapsed_time"))
+    elapsed = _live_elapsed(
+        q.get("elapsed_time"), q.get("elapsed_time_last_updated"), q.get("state")
+    )
     for idx, i in enumerate(q["items"]):
         if not isinstance(i, dict):
             continue
