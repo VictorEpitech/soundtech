@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # Volume forcé pendant la diffusion, restauré ensuite (0 = ne pas forcer)
     alert_force_volume: bool = True
     alert_volume: int = Field(default=100, ge=0, le=100)
+    # Son joué avant le TTS d'une alerte (media_id HA ; vide = désactivé) et plafond d'attente
+    alert_sound_media_id: str = "media-source://media_source/local/Alarme City.mp3"
+    alert_sound_max_wait: float = Field(default=15.0, ge=1, le=60)
     announce_force_volume: bool = True
     announce_volume: int = Field(default=100, ge=0, le=100)
     volume_settle: float = Field(default=0.5, ge=0, le=10)

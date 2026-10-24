@@ -11,7 +11,7 @@ from pydantic import SecretStr
 from sqlalchemy import delete
 
 from app.config import Settings, get_settings
-from app.ha import service
+from app.ha import service, volume
 from app.ha.router import get_redis
 from app.ma import service as ma_service
 from app.ma.client import MAAuthError, MAClient, MACommandError, MAConnectionError, ws_url
@@ -56,6 +56,7 @@ class FakeMA:
         self.cur: int = 1
         self.items: list[dict[str, Any]] = QUEUE_ITEMS
         self.items_after_play: list[dict[str, Any]] | None = None
+        self.players_state: str | None = None  # force l'état de p1
 
     async def handler(self, ws: Any) -> None:
         await ws.send(json.dumps({"server_version": "2.10.7", "schema_version": 65}))
@@ -90,7 +91,10 @@ class FakeMA:
             if cmd in self.fail:
                 await ws.send(json.dumps({"message_id": mid, "error_code": 999, "details": "no"}))
             elif cmd == "players/all":
-                await ws.send(json.dumps({"message_id": mid, "result": PLAYERS}))
+                res = [dict(p) for p in PLAYERS]
+                if self.players_state:
+                    res[0]["playback_state"] = self.players_state
+                await ws.send(json.dumps({"message_id": mid, "result": res}))
             elif cmd == "player_queues/get":
                 await ws.send(
                     json.dumps(
@@ -354,6 +358,7 @@ async def test_announcement_ducks_and_survives_ma_failure(db, redis, fake_ma) ->
     await queue.push(redis, str(ann.id), Priority.staff)
     ha, calls = mock_ha()
     assert await service.drain(db, redis, ha, _client(fake_ma)) == 1
+    await volume.wait_pending()  # la reprise est différée jusqu'à la fin estimée du TTS
     cmds = [c for c, _ in fake_ma.cmds]
     assert cmds.index("player_queues/pause") < cmds.index("player_queues/play")
     assert len(calls) == 1
@@ -650,3 +655,117 @@ async def _staff_delete_only_own(music_api, make_user, login_as, fake_ma) -> Non
         assert (await music_api.post(f"{P}/{path}")).status_code == 204
     r = await music_api.post(f"{P}/play", json={"uri": "lib://t/1", "option": "next"})
     assert r.status_code == 204
+
+
+async def test_group_volume_per_player_results(music_api, make_user, login_as, fake_ma) -> None:
+    await login_as(await make_user(Role.admin))
+    body_in = {"player_ids": ["p1", "zz"], "level": 70}
+    r = await music_api.post("/music/players/volume", json=body_in)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False
+    by_id = {x["id"]: x for x in body["results"]}
+    assert by_id["p1"]["ok"] is True and by_id["p1"]["name"] == "Grande salle"
+    assert by_id["zz"]["ok"] is False and "non déclaré" in by_id["zz"]["error"]
+    assert ("players/cmd/volume_set", {"player_id": "p1", "volume_level": 70}) in fake_ma.cmds
+    fake_ma.fail.add("players/cmd/volume_set")
+    r = await music_api.post("/music/players/volume", json={"player_ids": ["p1"], "level": 5})
+    assert r.status_code == 200 and r.json()["results"][0]["ok"] is False
+    assert r.json()["results"][0]["error"]
+    r = await music_api.post("/music/players/volume", json={"player_ids": [], "level": 5})
+    assert r.status_code == 422
+
+
+# --- reprise de la musique ------------------------------------------------------
+
+
+def _plays(fake_ma: FakeMA) -> int:
+    return [c for c, _ in fake_ma.cmds].count("player_queues/play")
+
+
+async def test_resume_only_after_last_overlapping_duck(fake_ma: FakeMA, redis) -> None:  # noqa: F811
+    ma = _client(fake_ma)
+    a = await ma_service.duck(ma, ["p1"], redis=redis, token="A")
+    fake_ma.cmds.clear()
+    fake_ma.players_state = "paused"  # p1 est déjà en pause (par A)
+    b = await ma_service.duck(ma, ["p1"], redis=redis, token="B")
+    assert a == ["p1"] and b == ["p1"]  # B est aussi responsable de la reprise
+    await ma_service.resume(ma, a, redis=redis, token="A")
+    assert _plays(fake_ma) == 0  # B parle encore
+    await ma_service.resume(ma, b, redis=redis, token="B")
+    assert _plays(fake_ma) == 1
+    await ma_service.resume(ma, b, redis=redis, token="B")
+    assert _plays(fake_ma) == 1  # pas de double reprise
+
+
+async def test_idle_player_not_resumed(fake_ma: FakeMA, redis) -> None:  # noqa: F811
+    ma = _client(fake_ma)
+    assert await ma_service.duck(ma, ["p2"], redis=redis, token="A") == []
+    await ma_service.resume(ma, [], redis=redis, token="A")
+    assert _plays(fake_ma) == 0
+
+
+async def test_resume_without_redis_state_still_plays_when_redis_down(fake_ma: FakeMA) -> None:
+    class Dead:
+        def __getattr__(self, name: str):  # type: ignore[no-untyped-def]
+            raise ConnectionError("redis down")
+
+    ma = _client(fake_ma)
+    paused = await ma_service.duck(ma, ["p1"], redis=Dead(), token="A")  # type: ignore[arg-type]
+    assert paused == ["p1"]
+    await ma_service.resume(ma, paused, redis=Dead(), token="A")  # type: ignore[arg-type]
+    assert _plays(fake_ma) == 1
+
+
+async def test_music_resumes_after_tts_failure_and_exception(db, redis, fake_ma) -> None:  # noqa: F811
+    from app.ha import queue
+    from app.ha.client import HAError
+
+    class HA:
+        def __init__(self, mode: str) -> None:
+            self.mode = mode
+
+        async def speak_many(self, entities, text, notify=None, ssml=None):  # type: ignore[no-untyped-def]
+            if self.mode == "raise":
+                raise RuntimeError("boom")
+            return {e: HAError("down") for e in entities}
+
+    for mode in ("fail", "raise"):
+        fake_ma.cmds.clear()
+        ann = Announcement(
+            id=uuid.uuid4(), text="t", priority=int(Priority.alert), status="queued",
+            is_test=False,
+            targets=[{"id": "x", "entity_id": _eid(), "name": "n", "ma_player_id": "p1"}],
+        )  # fmt: skip
+        async with db() as s:
+            s.add(ann)
+            await s.commit()
+        await queue.push(redis, str(ann.id), Priority.alert)
+        assert await service.process_one(db, redis, HA(mode), _client(fake_ma), _settings()) is True  # type: ignore[arg-type]
+        await volume.wait_pending()
+        assert _plays(fake_ma) == 1, mode
+
+
+async def test_resume_waits_for_estimated_tts_end(db, redis, fake_ma, monkeypatch) -> None:  # noqa: F811
+    import asyncio
+
+    from app.ha import queue
+
+    class HA:
+        async def speak_many(self, entities, text, notify=None, ssml=None):  # type: ignore[no-untyped-def]
+            return {e: None for e in entities}
+
+    monkeypatch.setattr(volume, "hold_seconds", lambda settings, text: 0.3)
+    ann = Announcement(
+        id=uuid.uuid4(), text="t", priority=int(Priority.staff), status="queued", is_test=False,
+        targets=[{"id": "x", "entity_id": _eid(), "name": "n", "ma_player_id": "p1"}],
+    )  # fmt: skip
+    async with db() as s:
+        s.add(ann)
+        await s.commit()
+    await queue.push(redis, str(ann.id), Priority.staff)
+    await service.process_one(db, redis, HA(), _client(fake_ma), _settings())  # type: ignore[arg-type]
+    assert _plays(fake_ma) == 0  # TTS encore en cours
+    await asyncio.sleep(0.5)
+    assert _plays(fake_ma) == 1
+    await volume.wait_pending()

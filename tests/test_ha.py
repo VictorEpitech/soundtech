@@ -287,7 +287,7 @@ async def test_worker_priority_and_partial_failure(db, redis) -> None:
     await queue.push(redis, str(high.id), Priority.alert)
     ha, calls = mock_ha(fail={b})
     assert await service.drain(db, redis, ha) == 2
-    texts = [c[2]["message"] for c in calls]
+    texts = [c[2]["message"] for c in calls if "message" in c[2]]
     assert texts[0] == "haut" and texts[-1] == "bas"
     async with db() as s:
         h = await s.get(Announcement, high.id)

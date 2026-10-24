@@ -211,7 +211,7 @@ async def test_alert_boost_budget_does_not_delay_speech(db, redis) -> None:
     await volume.wait_pending()  # le boost d'arrière-plan se termine, bornée par le step
 
 
-async def test_alert_does_not_wait_for_lock(db, redis) -> None:
+async def test_alert_forces_level_even_if_lock_held(db, redis) -> None:
     cfg, ha, e = _cfg(), FakeHA(), _eid()
     ann_id = await _send(db, redis, cfg, e, prio=Priority.alert)
     async with redis.lock(f"sound:vol:{e}:lock", timeout=30):
@@ -219,7 +219,8 @@ async def test_alert_does_not_wait_for_lock(db, redis) -> None:
         await service.process_one(db, redis, ha, None, cfg)  # type: ignore[arg-type]
         assert time.monotonic() - t0 < 1.0
     await volume.wait_pending()
-    assert ha.kinds() == ["speak"] and (await _ann(db, ann_id)).status == "done"
+    assert "speak" in ha.kinds() and (await _ann(db, ann_id)).status == "done"
+    assert ha.sets()[0] == 1.0  # le verrou tenu n'empêche pas l'alerte de forcer son niveau
 
 
 async def test_cancel_pending_keeps_lease_reaper_restores_at_deadline(
@@ -316,7 +317,7 @@ async def test_alert_during_announcement_restores_real_original(db, redis) -> No
     assert ha.vol == 0.7  # annonce en cours de lecture
     await _send(db, redis, cfg, e, text="alerte", prio=Priority.alert)
     await service.process_one(db, redis, ha, None, cfg)  # type: ignore[arg-type]
-    assert ha.vol == 1.0 and ha.kinds().count("get") == 1
+    assert ha.vol == 1.0 and ha.kinds().count("get") == 2  # original (1x) + relecture de contrôle
     await volume.wait_pending()
     assert ha.sets() == [0.7, 1.0, ORIG] and ha.vol == ORIG
 
@@ -388,3 +389,92 @@ async def test_api_force_volume_checkbox_and_defaults(ha_api, make_user, login_a
     assert r.json()["volume"] == 80  # test : volume forcé aussi
     page = await ha_api.get("/announce")
     assert 'name="force_volume"' in page.text and "80 %" in page.text
+
+
+async def test_alert_retries_until_level_confirmed(db, redis) -> None:
+    cfg, ha, e = _cfg(), FakeHA(), _eid()
+    calls = {"n": 0}
+
+    async def flaky_set(entity: str, level: float) -> None:
+        ha.log.append(("set", level))
+        calls["n"] += 1
+        if calls["n"] > 1:  # le 1er set est ignoré par l'enceinte
+            ha.vol = level
+
+    ha.set_volume = flaky_set  # type: ignore[method-assign]
+    ann_id = await _send(db, redis, cfg, e, prio=Priority.alert)
+    await service.process_one(db, redis, ha, None, cfg)  # type: ignore[arg-type]
+    await volume.wait_pending()
+    assert "speak" in ha.kinds()
+    assert calls["n"] >= 2
+    assert "volume_ok" not in (await _ann(db, ann_id)).results[e]  # type: ignore[index]
+
+
+async def test_alert_unconfirmed_level_warns_and_is_reported(db, redis, caplog) -> None:
+    cfg, ha, e = _cfg(), FakeHA(), _eid()
+
+    async def deaf_set(entity: str, level: float) -> None:
+        ha.log.append(("set", level))  # l'état ne bouge jamais
+
+    ha.set_volume = deaf_set  # type: ignore[method-assign]
+    ann_id = await _send(db, redis, cfg, e, prio=Priority.alert)
+    with caplog.at_level("WARNING"):
+        await service.process_one(db, redis, ha, None, cfg)  # type: ignore[arg-type]
+        await volume.wait_pending()
+    assert ha.sets().count(1.0) == 1 + volume.ALERT_VERIFY_RETRIES
+    assert "speak" in ha.kinds()
+    assert any(e in r.message and "non confirmé" in r.message for r in caplog.records)
+    res = (await _ann(db, ann_id)).results[e]  # type: ignore[index]
+    assert res["ok"] is True and res["volume_ok"] is False and "écart" in res["volume_error"]
+
+
+class SoundHA(FakeHA):
+    def __init__(self) -> None:
+        super().__init__()
+        self.states = iter(["playing", "playing", "idle"])
+
+    async def play_media(self, entity: str, media_id: str, media_type: str = "music") -> None:
+        self.log.append(("play", media_id))
+
+    async def get_state(self, entity: str) -> tuple[str, dict[str, Any]]:
+        self.log.append(("state", entity))
+        return next(self.states, "idle"), {}
+
+
+async def test_alert_sound_plays_before_tts_and_waits_for_end(db, redis, monkeypatch) -> None:
+    monkeypatch.setattr(service, "SOUND_POLL", 0.01)
+    cfg, ha, e = _cfg(), SoundHA(), _eid()
+    await _send(db, redis, cfg, e, prio=Priority.alert)
+    await service.process_one(db, redis, ha, None, cfg)  # type: ignore[arg-type]
+    await volume.wait_pending()
+    k = ha.kinds()
+    assert k.index("play") < k.index("speak")
+    last_state = max(i for i, x in enumerate(k) if x == "state")
+    assert k.count("state") == 3 and k.index("speak") > last_state
+    assert ("play", cfg.alert_sound_media_id) in ha.log
+
+
+async def test_alert_sound_disabled_or_normal_announcement_no_sound(db, redis) -> None:
+    ha, e = SoundHA(), _eid()
+    cfg = _cfg(alert_sound_media_id="")
+    await _send(db, redis, cfg, e, prio=Priority.alert)
+    await service.process_one(db, redis, ha, None, cfg)  # type: ignore[arg-type]
+    await _send(db, redis, _cfg(), e, prio=Priority.admin)
+    await service.process_one(db, redis, ha, None, _cfg())  # type: ignore[arg-type]
+    await volume.wait_pending()
+    assert "play" not in ha.kinds() and ha.kinds().count("speak") == 2
+
+
+async def test_alert_sound_failure_still_speaks(db, redis, caplog) -> None:
+    cfg, ha, e = _cfg(), SoundHA(), _eid()
+
+    async def boom(entity: str, media_id: str, media_type: str = "music") -> None:
+        raise HAConnectionError("nope")
+
+    ha.play_media = boom  # type: ignore[method-assign]
+    ann_id = await _send(db, redis, cfg, e, prio=Priority.alert)
+    with caplog.at_level("WARNING"):
+        await service.process_one(db, redis, ha, None, cfg)  # type: ignore[arg-type]
+        await volume.wait_pending()
+    assert "speak" in ha.kinds() and (await _ann(db, ann_id)).status == "done"
+    assert any("son d'alerte" in r.message and e in r.message for r in caplog.records)

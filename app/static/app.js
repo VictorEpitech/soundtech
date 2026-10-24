@@ -437,6 +437,28 @@
     setTimeout(function () { refresh("#players"); }, 800);
   }
 
+  // Volume de la sélection : un seul appel serveur (parallèle), résultat par lecteur.
+  async function groupVolume(level) {
+    var ids = selected();
+    if (!ids.length) { toast("Aucun lecteur sélectionné", true); return; }
+    try {
+      var r = await fetch("/music/players/volume", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_ids: ids, level: level }),
+      });
+      if (!r.ok) { toast(errorText({ status: r.status, responseText: await r.text() }), true); return; }
+      var data = await r.json();
+      var bad = data.results.filter(function (x) { return !x.ok; });
+      if (bad.length) {
+        toast(bad.length + "/" + data.results.length + " lecteur(s) en échec : " +
+          bad.map(function (x) { return x.name + " (" + x.error + ")"; }).join(", "), true);
+      } else toast("Volume appliqué (" + data.results.length + " lecteur(s))");
+    } catch (err) { toast("Serveur injoignable", true); }
+    setTimeout(function () { refresh("#players"); }, 800);
+  }
+
   window.SoundUI = {
     toast: toast, hideToast: hideToast, confirmDialog: confirmDialog, groupCall: groupCall, selected: selected, refresh: refresh,
   };
@@ -449,7 +471,7 @@
       return;
     }
     if (e.target.id === "group-volume") {
-      groupCall("volume", { level: parseInt(e.target.value, 10) }, "Volume appliqué");
+      groupVolume(parseInt(e.target.value, 10));
       return;
     }
     if (e.target.id !== "preset-select") return;

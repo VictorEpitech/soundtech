@@ -129,6 +129,31 @@ class HAClient:
             return None
         return min(1.0, max(0.0, float(level)))
 
+    async def get_state(self, entity_id: str) -> tuple[str, dict[str, Any]]:
+        """(state, attributes) de l'entité ; lève HAError si illisible."""
+        try:
+            r = await self._http.get(f"/api/states/{entity_id}")
+        except httpx.HTTPError as exc:
+            raise HAConnectionError(f"{type(exc).__name__}: {exc}") from exc
+        await self._check(r)
+        try:
+            data = r.json()
+            return str(data.get("state")), dict(data.get("attributes") or {})
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise HARequestError(f"réponse d'état illisible: {exc}") from exc
+
+    async def play_media(self, entity_id: str, media_id: str, media_type: str = "music") -> None:
+        """media_player.play_media (sans `announce` : ne coupe pas la lecture en cours)."""
+        await self.call_service(
+            "media_player",
+            "play_media",
+            {
+                "entity_id": entity_id,
+                "media_content_id": media_id,
+                "media_content_type": media_type,
+            },
+        )
+
     async def set_volume(self, entity_id: str, level: float) -> None:
         """media_player.volume_set ; level entre 0 et 1."""
         await self.call_service(

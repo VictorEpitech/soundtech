@@ -33,6 +33,9 @@ ACTIVE_KEY = "sound:vol:active"
 STEP_TIMEOUT = 4.0  # lecture ou mise à niveau (annonce)
 ALERT_STEP_TIMEOUT = 1.0  # idem pour une alerte, sous le budget global de service._boost
 LOCK_WAIT = 3.0
+ALERT_LOCK_WAIT = 0.4  # une alerte attend brièvement le verrou, puis force quand même
+VOLUME_TOLERANCE = 0.02
+ALERT_VERIFY_RETRIES = 2
 LOCK_TTL = 120
 LEASE_SLACK = 30.0  # marge avant que le reaper ne considère un bail comme abandonné
 
@@ -61,6 +64,8 @@ class Lease:
     announcement_id: str
     deadline: float = 0.0
     skipped: bool = False  # entité non pilotable : rien à libérer
+    volume_ok: bool | None = None  # alerte : niveau confirmé / non posé / inconnu (None)
+    volume_error: str = ""
 
 
 @dataclass
@@ -93,6 +98,42 @@ def new_lease(entity: str, announcement_id: str, hold: float) -> Lease:
     )
 
 
+async def force_verified(
+    ha: HAClient, lease: Lease, level_pct: int, step: float, retries: int = ALERT_VERIFY_RETRIES
+) -> None:
+    """Pose le niveau puis relit volume_level ; réessaie `retries` fois si l'écart dépasse 2 %.
+
+    Renseigne lease.volume_ok / volume_error, ne lève jamais (sauf annulation).
+    """
+    entity, target = lease.entity, level_pct / 100
+    err = ""
+    for _ in range(retries + 1):
+        try:
+            await asyncio.wait_for(ha.set_volume(entity, target), step)
+        except Exception as exc:
+            err = f"set: {type(exc).__name__}: {exc}"
+            continue
+        try:
+            got = await asyncio.wait_for(ha.get_volume(entity), step)
+        except Exception as exc:
+            got, err = None, f"lecture: {type(exc).__name__}: {exc}"
+        else:
+            if got is None:
+                err = "volume_level absent de l'état"
+        if got is None:  # set passé mais non vérifiable : inutile de réessayer à l'aveugle
+            lease.volume_error = err
+            log.warning("volume %s: ALERTE niveau %d%% posé, non vérifiable (%s)", entity,
+                        level_pct, err)  # fmt: skip
+            return
+        if abs(got - target) <= VOLUME_TOLERANCE:
+            lease.volume_ok, lease.volume_error = True, ""
+            return
+        err = f"écart: {got:.2f} au lieu de {target:.2f}"
+        await asyncio.sleep(0.2)
+    lease.volume_ok, lease.volume_error = False, err
+    log.warning("volume %s: ALERTE niveau %d%% non confirmé (%s)", entity, level_pct, err)
+
+
 async def acquire(
     redis: Redis,
     ha: HAClient,
@@ -111,14 +152,16 @@ async def acquire(
     entity = lease.entity
     if lease.skipped:
         log.warning("volume %s: entité non media_player, volume non forcé", entity)
+        if alert:
+            lease.volume_ok, lease.volume_error = False, "entité non media_player"
         return lease
     step = ALERT_STEP_TIMEOUT if alert else STEP_TIMEOUT
     try:
         async with redis.lock(
             _k(entity, "lock"),
             timeout=LOCK_TTL,
-            blocking=not alert,
-            blocking_timeout=None if alert else LOCK_WAIT,
+            blocking=True,
+            blocking_timeout=ALERT_LOCK_WAIT if alert else LOCK_WAIT,
         ):
             ttl = settings.volume_state_ttl
             leases, orig_key = _k(entity, "leases"), _k(entity, "orig")
@@ -146,13 +189,21 @@ async def acquire(
             await redis.sadd(ACTIVE_KEY, entity)
             for part in ("orig", "leases", "anns"):
                 await redis.expire(_k(entity, part), ttl)
-            try:
-                await asyncio.wait_for(ha.set_volume(entity, level_pct / 100), step)
-            except Exception as exc:
-                log.warning("volume %s: mise à niveau impossible (%s: %s)", entity,
-                            type(exc).__name__, exc)  # fmt: skip
+            if alert:
+                await force_verified(ha, lease, level_pct, step)
+            else:
+                try:
+                    await asyncio.wait_for(ha.set_volume(entity, level_pct / 100), step)
+                except Exception as exc:
+                    log.warning("volume %s: mise à niveau impossible (%s: %s)", entity,
+                                type(exc).__name__, exc)  # fmt: skip
     except Exception as exc:
         log.warning("volume %s: forçage ignoré (%s: %s)", entity, type(exc).__name__, exc)
+        if alert and lease.volume_ok is None:
+            # verrou/Redis indisponible : l'alerte force quand même le niveau, sans état
+            # (le détenteur du verrou restaure son volume d'origine ; aucun bail touché ici).
+            lease.skipped = True
+            await force_verified(ha, lease, level_pct, step)
         return lease
     if settings.volume_settle > 0 and not alert:
         await asyncio.sleep(settings.volume_settle)

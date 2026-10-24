@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from typing import Any, Literal
@@ -304,6 +305,45 @@ async def volume(
     ma: MAClient = Depends(get_ma),
 ) -> None:
     await _run(ma.volume_set(player_id, body.level))
+
+
+class GroupVolumeIn(BaseModel):
+    player_ids: list[str] = Field(min_length=1, max_length=50)
+    level: int = Field(ge=0, le=100)
+
+
+@router.post("/players/volume")
+async def group_volume(
+    body: GroupVolumeIn,
+    declared: dict[str, str] = Depends(declared_players),
+    _: User = Depends(music_user),
+    ma: MAClient = Depends(get_ma),
+) -> dict[str, Any]:
+    """Volume (0-100) sur plusieurs lecteurs en parallèle ; un résultat par lecteur, rien d'avalé.
+
+    Chaque lecteur est réglé individuellement (volume_set), y compris les membres d'un groupe
+    synchronisé : le volume du leader n'est pas répercuté de façon fiable sur les membres.
+    """
+    ids = list(dict.fromkeys(body.player_ids))
+
+    async def one(pid: str) -> dict[str, Any]:
+        name = declared.get(pid)
+        if name is None:
+            log.warning("volume groupe: lecteur %s non déclaré (ma_player_id absent)", pid)
+            return {"id": pid, "name": pid, "ok": False, "error": "lecteur non déclaré"}
+        try:
+            await ma.volume_set(pid, body.level)
+        except MAError as exc:
+            log.warning("volume groupe: %s (%s) échec: %s", name, pid, exc)
+            return {"id": pid, "name": name, "ok": False, "error": str(exc) or type(exc).__name__}
+        return {"id": pid, "name": name, "ok": True, "error": None}
+
+    results = await asyncio.gather(*(one(p) for p in ids))
+    return {
+        "level": body.level,
+        "ok": all(r["ok"] for r in results),
+        "results": list(results),
+    }
 
 
 # --- file d'attente ------------------------------------------------------------

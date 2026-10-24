@@ -23,7 +23,9 @@ INTERRUPTED = "interrompue"
 SENDING_STALE = timedelta(minutes=2)
 QUEUED_STALE = timedelta(minutes=1)
 LOCK_TIMEOUT = 120
-ALERT_BOOST_BUDGET = 1.5  # secondes : une alerte n'attend jamais plus pour le volume
+SOUND_POLL = 0.5
+SOUND_START_GRACE = 3.0  # secondes pour voir l'enceinte passer en lecture
+ALERT_BOOST_BUDGET = 2.5  # secondes : une alerte n'attend jamais plus pour le volume
 
 
 def priority_for(user: User) -> Priority:
@@ -154,19 +156,26 @@ async def process_one(
             players = [t.get("ma_player_id") for t in ann.targets]
             if ann.priority == Priority.alert:
                 # Une alerte n'attend jamais la musique : ducking borné, best-effort.
-                paused = await ma_service.duck(ma, players, timeout=settings.alert_duck_timeout)
+                paused = await ma_service.duck(
+                    ma, players, timeout=settings.alert_duck_timeout, redis=redis, token=raw
+                )
             else:
-                paused = await ma_service.duck(ma, players)
+                paused = await ma_service.duck(ma, players, redis=redis, token=raw)
             notify = {t["entity_id"]: t.get("notify_service") for t in ann.targets}
+            if ann.priority == Priority.alert:
+                await play_alert_sound(ha, settings, entities)
             outcome = await ha.speak_many(entities, ann.text, notify, ann.ssml)
         except Exception as exc:  # défense : ne jamais laisser une annonce en `sending`
             log.exception("announcement %s crashed", raw)
             outcome = {e: HAError(f"internal error: {type(exc).__name__}") for e in entities}
         finally:
+            spoke = outcome is not None and any(err is None for err in outcome.values())
             try:
-                await ma_service.resume(ma, paused)
+                _resume_later(
+                    ma, redis, paused, raw, volume.hold_seconds(settings, ann.text) if spoke else 0
+                )
             except Exception:
-                log.warning("announcement %s: music resume failed", raw)
+                log.warning("announcement %s: music resume scheduling failed", raw)
             if outcome is None:  # annulation / BaseException
                 ann.results = {"_error": INTERRUPTED}
                 ann.status = AnnouncementStatus.failed.value
@@ -175,6 +184,13 @@ async def process_one(
                     e: ({"ok": True} if err is None else {"ok": False, "error": str(err)})
                     for e, err in outcome.items()
                 }
+                for lease in leases:
+                    if lease.volume_ok is not True and ann.priority == Priority.alert:
+                        r = ann.results.get(lease.entity)
+                        if r is not None:
+                            r["volume_ok"] = lease.volume_ok  # False = non posé, None = inconnu
+                            if lease.volume_error:
+                                r["volume_error"] = lease.volume_error
                 all_ok = all(err is None for err in outcome.values())
                 ann.status = (
                     AnnouncementStatus.done if all_ok else AnnouncementStatus.failed
@@ -185,6 +201,67 @@ async def process_one(
             finally:  # après le commit : un échec de restauration marque la ligne finale
                 _release_later(db, redis, ha, settings, ann, leases, outcome)
     return True
+
+
+async def _resume_after(
+    ma: MAClient | None, redis: Redis, paused: list[str], token: str, delay: float
+) -> None:
+    try:
+        if delay > 0:
+            await asyncio.sleep(delay)
+    finally:  # même annulée (arrêt), la reprise est tentée
+        await asyncio.shield(ma_service.resume(ma, paused, redis=redis, token=token))
+
+
+def _resume_later(
+    ma: MAClient | None, redis: Redis, paused: list[str], token: str, delay: float
+) -> None:
+    """Reprise de la musique après la fin estimée du TTS (l'appel HA rend la main avant)."""
+    if not paused:
+        return
+    volume.track(asyncio.create_task(_resume_after(ma, redis, paused, token, delay)))
+
+
+async def _play_one_sound(ha: HAClient, entity: str, media_id: str) -> None:
+    await ha.play_media(entity, media_id)
+    seen_playing = False
+    t0 = asyncio.get_running_loop().time()
+    while True:
+        await asyncio.sleep(SOUND_POLL)
+        state, _ = await ha.get_state(entity)
+        if state == "playing":
+            seen_playing = True
+        elif seen_playing:
+            return
+        elif asyncio.get_running_loop().time() - t0 > SOUND_START_GRACE:
+            return  # jamais passé en lecture : le son n'a pas démarré, on ne bloque pas
+
+
+async def play_alert_sound(ha: HAClient, settings: Settings, entities: list[str]) -> None:
+    """Son d'alerte avant le TTS, en parallèle, attente de fin plafonnée. Ne lève jamais.
+
+    Limite : les Echo pilotés par Alexa Media Player n'acceptent pas forcément un media-source
+    (play_media y signifie « recherche musicale ») ; un échec est journalisé et l'alerte parle.
+    """
+    media_id = settings.alert_sound_media_id.strip()
+    targets = [e for e in dict.fromkeys(entities) if e.startswith("media_player.")]
+    if not media_id or not targets:
+        return
+
+    async def one(entity: str) -> None:
+        try:
+            await _play_one_sound(ha, entity, media_id)
+        except Exception as exc:
+            log.warning("son d'alerte %s: échec (%s: %s)", entity, type(exc).__name__, exc)
+
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*(one(e) for e in targets)), settings.alert_sound_max_wait
+        )
+    except TimeoutError:
+        log.warning("son d'alerte: attente de fin plafonnée à %.0fs", settings.alert_sound_max_wait)
+    except Exception:
+        log.exception("son d'alerte ignoré")
 
 
 async def _boost(
@@ -212,6 +289,12 @@ async def _boost(
         if tasks:
             if alert:
                 await asyncio.wait(tasks, timeout=ALERT_BOOST_BUDGET)
+                for lease in leases:
+                    if lease.volume_ok is None and not lease.skipped:
+                        log.warning(
+                            "annonce %s: volume non confirmé à temps sur %s (alerte diffusée)",
+                            ann.id, lease.entity,
+                        )  # fmt: skip
             else:
                 await asyncio.gather(*tasks, return_exceptions=True)
         return leases
